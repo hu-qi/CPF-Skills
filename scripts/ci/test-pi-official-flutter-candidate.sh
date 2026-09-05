@@ -39,11 +39,10 @@ PY
 
 evidence_file="$artifact_dir/${FLUTTER_CANDIDATE}.evidence.json"
 output_file="$artifact_dir/${FLUTTER_CANDIDATE}.md"
+normalized_file="$artifact_dir/${FLUTTER_CANDIDATE}.handoff.json"
 status_file="$artifact_dir/runner-status.json"
 
 # Execute the network-facing parts deterministically with bounded requests.
-# This follows the official Skill's Phase 1 / cross-platform search evidence needs,
-# but does not let the model control retries or external tools.
 set +e
 timeout --signal=TERM --kill-after=10s 90s \
   python3 tests/pi/live/collect_official_flutter_search_evidence.py \
@@ -52,9 +51,12 @@ collector_exit=$?
 set -e
 
 if [[ "$collector_exit" -ne 0 || ! -s "$evidence_file" ]]; then
-  printf '{"candidate":"%s","collector_exit":%s,"pi_exit":null,"result":"inconclusive"}\n' \
+  : > "$output_file"
+  python3 tests/pi/live/normalize_official_flutter_result.py \
+    "$FLUTTER_CANDIDATE" 125 "$evidence_file" "$output_file" "$normalized_file"
+  printf '{"candidate":"%s","collector_exit":%s,"pi_exit":null,"normalized":true}\n' \
     "$FLUTTER_CANDIDATE" "$collector_exit" > "$status_file"
-  echo "Evidence collector failed; preserving inconclusive result."
+  echo "Evidence collector failed; normalized result is inconclusive."
   exit 0
 fi
 
@@ -102,9 +104,12 @@ timeout --signal=TERM --kill-after=10s 75s \
 pi_exit=${PIPESTATUS[0]}
 set -e
 
-printf '{"candidate":"%s","collector_exit":%s,"pi_exit":%s}\n' \
+python3 tests/pi/live/normalize_official_flutter_result.py \
+  "$FLUTTER_CANDIDATE" "$pi_exit" "$evidence_file" "$output_file" "$normalized_file"
+
+printf '{"candidate":"%s","collector_exit":%s,"pi_exit":%s,"normalized":true}\n' \
   "$FLUTTER_CANDIDATE" "$collector_exit" "$pi_exit" > "$status_file"
 
-# Observational smoke: artifacts preserve evidence + official Skill judgment.
-# Machine-level promotion/demotion semantics are enforced by the handoff contract.
+# Observational smoke: artifacts preserve evidence + official Skill judgment +
+# normalized handoff. Machine promotion/demotion semantics are enforced separately.
 exit 0
