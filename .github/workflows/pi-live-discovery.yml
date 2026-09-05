@@ -1,0 +1,68 @@
+name: Pi Live Flutter Discovery E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/pi/live/**"
+      - "scripts/ci/test-pi-live-discovery.sh"
+      - ".github/workflows/pi-live-discovery.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pi-live-flutter-discovery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-flutter-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: ${{ matrix.model == 'agnes-2.5-pro' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        model:
+          - agnes-2.5-flash
+          - agnes-2.5-pro
+
+    env:
+      AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+      AGNES_BASE_URL: https://api.agnes-ai.cn/v1
+      PI_MODEL: ${{ matrix.model }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Require Agnes API secret
+        shell: bash
+        run: |
+          if [[ -z "${AGNES_API_KEY:-}" ]]; then
+            echo "::error::Repository secret AGNES_API_KEY is not configured."
+            exit 1
+          fi
+
+      - name: Install Pi
+        run: npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.83.0
+
+      - name: Run live Flutter discovery E2E
+        shell: bash
+        run: bash scripts/ci/test-pi-live-discovery.sh
+
+      - name: Upload live discovery output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-live-flutter-${{ matrix.model }}-output
+          path: .artifacts/pi-live/
+          if-no-files-found: ignore
