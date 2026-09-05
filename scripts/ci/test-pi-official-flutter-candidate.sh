@@ -61,7 +61,7 @@ prompt="/skill:flutter-library-search 请对 Flutter 包 ${FLUTTER_CANDIDATE} �
 }
 \`\`\`
 
-`result` 只能使用上述四个 token；如果证据不足或来源不可用，必须使用 `inconclusive`。"
+result 字段只能使用上述四个 token；如果证据不足或来源不可用，必须使用 inconclusive。"
 
 set +e
 timeout --signal=TERM --kill-after=15s 3m \
