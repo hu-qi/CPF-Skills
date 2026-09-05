@@ -1,0 +1,70 @@
+name: Pi Skill Contract Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".atomcode/skills/**"
+      - "resources/**"
+      - "tests/pi/**"
+      - "scripts/ci/**"
+      - ".github/workflows/pi-skill-test.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pi-skill-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discovery-contract:
+    # GitHub does not expose repository secrets to forked pull requests.
+    # Skip those runs instead of producing a misleading authentication failure.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        model:
+          - agnes-2.5-flash
+          - agnes-2.5-pro
+
+    env:
+      AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+      AGNES_BASE_URL: https://api.agnes-ai.cn/v1
+      PI_MODEL: ${{ matrix.model }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Require Agnes API secret
+        shell: bash
+        run: |
+          if [[ -z "${AGNES_API_KEY:-}" ]]; then
+            echo "::error::Repository secret AGNES_API_KEY is not configured."
+            exit 1
+          fi
+
+      - name: Install Pi
+        run: npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.83.0
+
+      - name: Run discovery Skill contract test
+        shell: bash
+        run: bash scripts/ci/test-pi-skill.sh
+
+      - name: Upload Pi output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-${{ matrix.model }}-output
+          path: .artifacts/pi/
+          if-no-files-found: ignore
