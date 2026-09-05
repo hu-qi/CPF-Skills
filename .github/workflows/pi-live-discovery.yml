@@ -2,13 +2,6 @@ name: Pi Live Flutter Discovery E2E
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "tests/pi/live/**"
-      - "scripts/ci/test-pi-live-discovery.sh"
-      - ".github/workflows/pi-live-discovery.yml"
 
 permissions:
   contents: read
