@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -11,10 +10,42 @@ EXPECTED = {
     "GammaPackage": "EXCLUDED_NO_ADAPTATION_NEEDED",
 }
 
+ALLOWED_STATUSES = {
+    "RECOMMENDED",
+    "NEEDS_OFFICIAL_CHECK",
+    "EXCLUDED_ALREADY_ADAPTED",
+    "EXCLUDED_NO_ADAPTATION_NEEDED",
+    "EXCLUDED_LOW_VALUE",
+    "EXCLUDED_UNVERIFIABLE",
+}
+
 
 def fail(message: str) -> None:
     print(f"CONTRACT FAILED: {message}", file=sys.stderr)
     raise SystemExit(1)
+
+
+def normalize_cell(cell: str) -> str:
+    return cell.strip().strip("`").strip()
+
+
+def parse_candidate_statuses(text: str) -> dict[str, str]:
+    rows: dict[str, str] = {}
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not (line.startswith("|") and line.endswith("|")):
+            continue
+
+        cells = [normalize_cell(cell) for cell in line.strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+
+        candidate, status = cells[0], cells[1]
+        if candidate in EXPECTED:
+            rows[candidate] = status
+
+    return rows
 
 
 def main() -> None:
@@ -29,22 +60,23 @@ def main() -> None:
     if not text.strip():
         fail("Pi returned empty output")
 
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    rows = parse_candidate_statuses(text)
 
     for candidate, expected_status in EXPECTED.items():
-        matching_lines = [line for line in lines if candidate.lower() in line.lower()]
-        if not matching_lines:
-            fail(f"candidate {candidate} not found in output")
+        if candidate not in rows:
+            fail(f"candidate {candidate} not found in a Markdown table row")
 
-        if not any(expected_status in line for line in matching_lines):
-            rendered = "\n".join(matching_lines)
+        actual_status = rows[candidate]
+        if actual_status not in ALLOWED_STATUSES:
             fail(
-                f"{candidate} must be {expected_status}; matching output was:\n{rendered}"
+                f"{candidate} returned non-canonical status token {actual_status!r}; "
+                f"allowed={sorted(ALLOWED_STATUSES)}"
             )
 
-    alpha_lines = [line for line in lines if "alphaplugin" in line.lower()]
-    if any(re.search(r"\bRECOMMENDED\b", line) for line in alpha_lines):
-        fail("AlphaPlugin must not be marked RECOMMENDED while required checks are incomplete")
+        if actual_status != expected_status:
+            fail(
+                f"{candidate} must be {expected_status}; actual status was {actual_status}"
+            )
 
     print("CONTRACT PASSED: discovery state machine matches expected outcomes")
 
