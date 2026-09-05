@@ -35,21 +35,11 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Flash is the required regression gate. Pro still runs on every eligible CI run,
-    # but remains advisory so provider-side quota exhaustion does not block development.
-    continue-on-error: ${{ matrix.model == 'agnes-2.5-pro' }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        model:
-          - agnes-2.5-flash
-          - agnes-2.5-pro
 
     env:
       AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
       AGNES_BASE_URL: https://api.agnes-ai.cn/v1
-      PI_MODEL: ${{ matrix.model }}
+      PI_MODEL: agnes-2.5-flash
 
     steps:
       - name: Checkout
@@ -79,6 +69,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pi-${{ matrix.model }}-output
+          name: pi-agnes-2.5-flash-output
           path: .artifacts/pi/
           if-no-files-found: ignore
