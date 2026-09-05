@@ -1,0 +1,67 @@
+name: Pi Official Flutter Candidate Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Flutter package name to check with CPF-Flutter official Skill
+        required: true
+        default: cached_network_image
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/ci/test-pi-official-flutter-candidate.sh"
+      - ".github/workflows/pi-official-flutter-candidate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pi-official-flutter-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  official-candidate-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    env:
+      AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+      AGNES_BASE_URL: https://api.agnes-ai.cn/v1
+      PI_MODEL: agnes-2.5-flash
+      FLUTTER_CANDIDATE: ${{ github.event.inputs.candidate || 'cached_network_image' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Require Agnes API secret
+        shell: bash
+        run: |
+          if [[ -z "${AGNES_API_KEY:-}" ]]; then
+            echo "::error::Repository secret AGNES_API_KEY is not configured."
+            exit 1
+          fi
+
+      - name: Install Pi
+        run: npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.83.0
+
+      - name: Run CPF-Flutter official library search
+        shell: bash
+        run: bash scripts/ci/test-pi-official-flutter-candidate.sh
+
+      - name: Upload official candidate output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-official-flutter-${{ env.FLUTTER_CANDIDATE }}
+          path: |
+            .artifacts/pi-official-flutter/
+            .artifacts/official-skills/
+          if-no-files-found: ignore
