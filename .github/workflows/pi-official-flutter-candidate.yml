@@ -4,14 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       candidate:
-        description: Flutter package name to check with CPF-Flutter official Skill
+        description: Flutter package name to qualify with CPF-Flutter official Skill
         required: true
         default: cached_network_image
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/pi-official-flutter-candidate.yml"
 
 permissions:
   contents: read
@@ -29,7 +24,7 @@ jobs:
       AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
       AGNES_BASE_URL: https://api.agnes-ai.cn/v1
       PI_MODEL: agnes-2.5-flash
-      FLUTTER_CANDIDATE: ${{ github.event.inputs.candidate || 'cached_network_image' }}
+      FLUTTER_CANDIDATE: ${{ github.event.inputs.candidate }}
 
     steps:
       - name: Checkout
@@ -51,11 +46,11 @@ jobs:
       - name: Install Pi
         run: npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.83.0
 
-      - name: Run CPF-Flutter official library search
+      - name: Qualify Flutter candidate with CPF-Flutter official Skill
         shell: bash
         run: bash scripts/ci/test-pi-official-flutter-candidate.sh
 
-      - name: Upload official candidate output
+      - name: Upload qualification artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
