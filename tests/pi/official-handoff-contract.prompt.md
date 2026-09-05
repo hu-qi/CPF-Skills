@@ -26,8 +26,8 @@
 测试候选：
 
 1. `ReadyPlugin`
-   - `library_search.result = not_found`
-   - `adaptation_necessity.result = needed`
+   - `library_search.result = needs_adaptation`
+   - `adaptation_necessity.result = not_run`
    - 所有 required 去重源均 `checked`
    - 所有 required 去重源 `matches = []`
    - 候选维护性、生态价值与征文价值均已通过前置筛选
@@ -45,8 +45,8 @@
    - 无去重命中
 
 4. `PartialCheckPlugin`
-   - `library_search.result = not_found`
-   - `adaptation_necessity.result = needed`
+   - `library_search.result = needs_adaptation`
+   - `adaptation_necessity.result = not_run`
    - CPF-Flutter 与 hxa-flutter 为 `checked` 且无匹配
    - `CPF-Flutter ThirdpartyLibrarites` 为 required，但 `result = partial`
    - 候选本身仍有较高价值
