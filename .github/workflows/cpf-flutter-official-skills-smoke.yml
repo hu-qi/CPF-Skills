@@ -1,0 +1,39 @@
+name: CPF-Flutter Official Skills Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "resources/frameworks.yaml"
+      - "scripts/ci/fetch-cpf-flutter-skills.sh"
+      - ".github/workflows/cpf-flutter-official-skills-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpf-flutter-official-skills-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-official-skills:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch CPF-Flutter official Skills
+        shell: bash
+        run: bash scripts/ci/fetch-cpf-flutter-skills.sh
+
+      - name: Upload official Skill manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpf-flutter-official-skills-manifest
+          path: .artifacts/official-skills/
+          if-no-files-found: ignore
