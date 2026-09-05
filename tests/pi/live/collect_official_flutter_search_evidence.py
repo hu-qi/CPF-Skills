@@ -3,15 +3,18 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import re
+import subprocess
 import sys
+import tempfile
 import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
 
-USER_AGENT = "CPF-Skills-CI/0.2 (+https://github.com/hu-qi/CPF-Skills)"
+USER_AGENT = "CPF-Skills-CI/0.3 (+https://github.com/hu-qi/CPF-Skills)"
 HTTP_TIMEOUT = 8
-MAX_DART_FILES = 24
+GIT_TIMEOUT = 35
+MAX_DART_FILES = 64
 CHANNEL_PATTERNS = (
     "MethodChannel",
     "EventChannel",
@@ -36,15 +39,6 @@ def request_json(url: str) -> Any:
         return json.loads(response.read().decode("utf-8"))
 
 
-def request_text(url: str) -> str:
-    request = urllib.request.Request(
-        url,
-        headers={"User-Agent": USER_AGENT, "Accept": "text/plain,*/*"},
-    )
-    with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
-        return response.read().decode("utf-8", errors="replace")
-
-
 def safe_json(url: str) -> tuple[str, Any | None, str | None]:
     try:
         return "checked", request_json(url), None
@@ -57,21 +51,6 @@ def first_string(*values: Any) -> str | None:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return None
-
-
-def parse_github_repo(url: str | None) -> tuple[str, str] | None:
-    if not url:
-        return None
-    parsed = urllib.parse.urlparse(url)
-    if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
-        return None
-    parts = [part for part in parsed.path.split("/") if part]
-    if len(parts) < 2:
-        return None
-    owner, repo = parts[0], parts[1]
-    if repo.endswith(".git"):
-        repo = repo[:-4]
-    return owner, repo
 
 
 def pub_dev_evidence(candidate: str) -> dict[str, Any]:
@@ -112,112 +91,177 @@ def pub_dev_evidence(candidate: str) -> dict[str, Any]:
     }
 
 
-def fetch_raw_dart(url: str) -> dict[str, Any]:
+def run_command(args: list[str], *, cwd: Path | None = None, timeout: int) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        args,
+        cwd=str(cwd) if cwd else None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def git_remote_branches(repository_url: str) -> tuple[list[str], str | None]:
     try:
-        text = request_text(url)
+        proc = run_command(
+            ["git", "ls-remote", "--heads", repository_url],
+            timeout=12,
+        )
     except Exception as exc:  # noqa: BLE001
-        return {"url": url, "result": "unavailable", "error": f"{type(exc).__name__}: {exc}"}
-    channels = [pattern for pattern in CHANNEL_PATTERNS if pattern in text]
-    platform_checks = [pattern for pattern in PLATFORM_PATTERNS if pattern in text]
-    return {
-        "url": url,
-        "result": "checked",
-        "channels": channels,
-        "platform_checks": platform_checks,
-    }
+        return [], f"{type(exc).__name__}: {exc}"
+    if proc.returncode != 0:
+        return [], proc.stderr.strip() or f"git ls-remote exited {proc.returncode}"
+
+    branches: list[str] = []
+    for line in proc.stdout.splitlines():
+        if "refs/heads/" not in line:
+            continue
+        name = line.split("refs/heads/", 1)[1].strip()
+        if name:
+            branches.append(name)
+    return branches, None
 
 
-def github_source_evidence(repository_url: str | None) -> dict[str, Any]:
-    parsed = parse_github_repo(repository_url)
-    if not parsed:
+def pubspec_name(path: Path) -> str | None:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    match = re.search(r"(?m)^name:\s*['\"]?([A-Za-z0-9_.-]+)['\"]?\s*(?:#.*)?$", text)
+    return match.group(1) if match else None
+
+
+def relative_paths(root: Path) -> list[str]:
+    paths: list[str] = []
+    for path in root.rglob("*"):
+        if ".git" in path.parts:
+            continue
+        try:
+            paths.append(path.relative_to(root).as_posix())
+        except ValueError:
+            continue
+    return paths
+
+
+def scan_dart_files(package_root: Path) -> tuple[list[str], list[str], int, list[str]]:
+    lib = package_root / "lib"
+    if not lib.is_dir():
+        return [], [], 0, []
+
+    dart_files = sorted(lib.rglob("*.dart"))[:MAX_DART_FILES]
+    channels: set[str] = set()
+    platform_checks: set[str] = set()
+    scanned_paths: list[str] = []
+    for path in dart_files:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        scanned_paths.append(path.relative_to(package_root).as_posix())
+        channels.update(pattern for pattern in CHANNEL_PATTERNS if pattern in text)
+        platform_checks.update(pattern for pattern in PLATFORM_PATTERNS if pattern in text)
+
+    return sorted(channels), sorted(platform_checks), len(scanned_paths), scanned_paths
+
+
+def git_source_evidence(candidate: str, repository_url: str | None) -> dict[str, Any]:
+    if not repository_url or not repository_url.startswith(("https://", "http://")):
         return {
             "source": {
                 "name": "origin_repository",
                 "url": repository_url,
-                "result": "partial" if repository_url else "unavailable",
-                "note": "deterministic source scan currently supports GitHub repositories",
+                "result": "unavailable",
+                "error": "pub.dev did not expose a clonable http(s) repository URL",
             },
             "repository": None,
         }
 
-    owner, repo = parsed
-    repo_api = f"https://api.github.com/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}"
-    result, metadata, error = safe_json(repo_api)
-    source: dict[str, Any] = {"name": "origin_repository", "url": repo_api, "result": result}
-    if error or not isinstance(metadata, dict):
-        source["error"] = error or "unexpected repository response"
-        return {"source": source, "repository": None}
+    source: dict[str, Any] = {
+        "name": "origin_repository",
+        "url": repository_url,
+        "result": "checked",
+        "method": "git_clone_depth_1",
+    }
 
-    default_branch = metadata.get("default_branch") if isinstance(metadata.get("default_branch"), str) else "main"
-    tree_url = f"{repo_api}/git/trees/{urllib.parse.quote(default_branch)}?recursive=1"
-    tree_result, tree_payload, tree_error = safe_json(tree_url)
-    if tree_result != "checked" or not isinstance(tree_payload, dict):
-        source["result"] = "partial"
-        source["tree_error"] = tree_error or "unexpected tree response"
+    with tempfile.TemporaryDirectory(prefix="cpf-flutter-origin-") as tmp:
+        repo_dir = Path(tmp) / "repo"
+        try:
+            proc = run_command(
+                ["git", "clone", "--depth", "1", "--no-tags", repository_url, str(repo_dir)],
+                timeout=GIT_TIMEOUT,
+            )
+        except Exception as exc:  # noqa: BLE001
+            source["result"] = "unavailable"
+            source["error"] = f"{type(exc).__name__}: {exc}"
+            return {"source": source, "repository": None}
+
+        if proc.returncode != 0:
+            source["result"] = "unavailable"
+            source["error"] = proc.stderr.strip()[-800:] or f"git clone exited {proc.returncode}"
+            return {"source": source, "repository": None}
+
+        rev = run_command(["git", "rev-parse", "HEAD"], cwd=repo_dir, timeout=5)
+        commit = rev.stdout.strip() if rev.returncode == 0 else None
+
+        package_roots: list[Path] = []
+        for pubspec in repo_dir.rglob("pubspec.yaml"):
+            if ".git" in pubspec.parts:
+                continue
+            if pubspec_name(pubspec) == candidate:
+                package_roots.append(pubspec.parent)
+
+        if package_roots:
+            package_root = sorted(package_roots, key=lambda path: len(path.parts))[0]
+            package_root_match = True
+        else:
+            package_root = repo_dir
+            package_root_match = False
+            source["result"] = "partial"
+            source["note"] = "cloned repository, but could not locate a pubspec.yaml whose name matches the candidate"
+
+        paths = relative_paths(package_root)
+        top_dirs = sorted({path.split("/", 1)[0] for path in paths if "/" in path})
+        root_dirs = {path for path in paths if "/" not in path and (package_root / path).is_dir()}
+        has_android = "android" in root_dirs
+        has_ios = "ios" in root_dirs
+        has_ohos_or_harmony = any(name in root_dirs for name in ("ohos", "harmony", "openharmony"))
+        channels, platform_checks, dart_count, dart_paths = scan_dart_files(package_root)
+
+        branches, branch_error = git_remote_branches(repository_url)
+        harmony_branches = [
+            name
+            for name in branches
+            if any(token in name.lower() for token in ("ohos", "harmony", "openharmony"))
+        ]
+        if branch_error:
+            source["branch_check"] = "partial"
+            source["branch_error"] = branch_error
+
+        package_path = package_root.relative_to(repo_dir).as_posix()
+        if package_path == ".":
+            package_path = ""
+
         return {
             "source": source,
             "repository": {
-                "owner": owner,
-                "repo": repo,
-                "default_branch": default_branch,
-                "html_url": metadata.get("html_url"),
+                "html_url": repository_url,
+                "commit": commit,
+                "candidate_package_root_found": package_root_match,
+                "candidate_package_path": package_path,
+                "top_directories": top_dirs,
+                "root_directories": sorted(root_dirs),
+                "has_android": has_android,
+                "has_ios": has_ios,
+                "has_ohos_or_harmony": has_ohos_or_harmony,
+                "harmony_branches": harmony_branches,
+                "dart_files_scanned": dart_count,
+                "dart_files": dart_paths,
+                "channel_markers": channels,
+                "platform_check_markers": platform_checks,
             },
         }
-
-    tree = tree_payload.get("tree") if isinstance(tree_payload.get("tree"), list) else []
-    paths = [item.get("path") for item in tree if isinstance(item, dict) and isinstance(item.get("path"), str)]
-    top_dirs = sorted({path.split("/", 1)[0] for path in paths if "/" in path})
-    ohos_paths = [path for path in paths if path == "ohos" or path.startswith("ohos/") or path == "harmony" or path.startswith("harmony/")]
-    android_paths = [path for path in paths if path == "android" or path.startswith("android/")]
-    ios_paths = [path for path in paths if path == "ios" or path.startswith("ios/")]
-    dart_paths = [path for path in paths if path.startswith("lib/") and path.endswith(".dart")][:MAX_DART_FILES]
-
-    raw_urls = [
-        f"https://raw.githubusercontent.com/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}/{urllib.parse.quote(default_branch)}/{path}"
-        for path in dart_paths
-    ]
-    dart_scans: list[dict[str, Any]] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-        for scan in executor.map(fetch_raw_dart, raw_urls):
-            dart_scans.append(scan)
-
-    channels = sorted({channel for scan in dart_scans for channel in scan.get("channels", [])})
-    platform_checks = sorted({check for scan in dart_scans for check in scan.get("platform_checks", [])})
-    unavailable_files = sum(1 for scan in dart_scans if scan.get("result") != "checked")
-    if tree_payload.get("truncated") is True or unavailable_files:
-        source["result"] = "partial"
-
-    branches_url = f"{repo_api}/branches?per_page=100"
-    branch_result, branch_payload, branch_error = safe_json(branches_url)
-    harmony_branches: list[str] = []
-    if branch_result == "checked" and isinstance(branch_payload, list):
-        for item in branch_payload:
-            if isinstance(item, dict) and isinstance(item.get("name"), str):
-                name = item["name"]
-                if any(token in name.lower() for token in ("ohos", "harmony", "openharmony")):
-                    harmony_branches.append(name)
-    else:
-        source["result"] = "partial"
-        source["branch_error"] = branch_error
-
-    return {
-        "source": source,
-        "repository": {
-            "owner": owner,
-            "repo": repo,
-            "default_branch": default_branch,
-            "html_url": metadata.get("html_url"),
-            "top_directories": top_dirs,
-            "has_android": bool(android_paths),
-            "has_ios": bool(ios_paths),
-            "has_ohos_or_harmony": bool(ohos_paths),
-            "harmony_branches": harmony_branches,
-            "dart_files_scanned": len(dart_scans),
-            "dart_files_unavailable": unavailable_files,
-            "channel_markers": channels,
-            "platform_check_markers": platform_checks,
-        },
-    }
 
 
 def repository_search(name: str, url: str) -> dict[str, Any]:
@@ -226,23 +270,24 @@ def repository_search(name: str, url: str) -> dict[str, Any]:
     if error:
         item["error"] = error
         return item
+
     matches: list[dict[str, Any]] = []
+    raw_items: Any = None
     if isinstance(payload, dict):
         raw_items = payload.get("items") if isinstance(payload.get("items"), list) else payload.get("data")
-        if isinstance(raw_items, list):
-            for raw in raw_items[:10]:
-                if isinstance(raw, dict):
-                    matches.append(
-                        {
-                            "name": raw.get("name") or raw.get("full_name"),
-                            "full_name": raw.get("full_name"),
-                            "html_url": raw.get("html_url") or raw.get("web_url"),
-                        }
-                    )
     elif isinstance(payload, list):
-        for raw in payload[:10]:
+        raw_items = payload
+
+    if isinstance(raw_items, list):
+        for raw in raw_items[:10]:
             if isinstance(raw, dict):
-                matches.append({"name": raw.get("name"), "full_name": raw.get("full_name"), "html_url": raw.get("html_url")})
+                matches.append(
+                    {
+                        "name": raw.get("name") or raw.get("full_name"),
+                        "full_name": raw.get("full_name"),
+                        "html_url": raw.get("html_url") or raw.get("web_url"),
+                    }
+                )
     item["matches"] = matches
     return item
 
@@ -272,15 +317,19 @@ def main() -> None:
     pub = pub_dev_evidence(candidate)
     package = pub.get("package") if isinstance(pub, dict) else None
     repository_url = package.get("repository") if isinstance(package, dict) else None
-    origin = github_source_evidence(repository_url if isinstance(repository_url, str) else None)
+    origin = git_source_evidence(
+        candidate,
+        repository_url if isinstance(repository_url, str) else None,
+    )
     searches = cross_platform_search(candidate)
 
     evidence = {
-        "schema_version": 1,
+        "schema_version": 2,
         "candidate": candidate,
         "collector": {
             "mode": "official_flutter_library_search_evidence",
             "network_timeout_seconds": HTTP_TIMEOUT,
+            "git_timeout_seconds": GIT_TIMEOUT,
             "dart_file_limit": MAX_DART_FILES,
             "note": "Evidence collection is bounded and deterministic. Missing or unavailable sources must not be treated as proof of absence.",
         },
