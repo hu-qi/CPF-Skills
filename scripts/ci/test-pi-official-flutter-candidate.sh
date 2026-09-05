@@ -37,31 +37,34 @@ config = {
 path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
-evidence_file="$artifact_dir/${FLUTTER_CANDIDATE}.evidence.json"
+official_evidence_file="$artifact_dir/${FLUTTER_CANDIDATE}.official-evidence.json"
+activity_evidence_file="$artifact_dir/${FLUTTER_CANDIDATE}.activity-evidence.json"
 output_file="$artifact_dir/${FLUTTER_CANDIDATE}.md"
 normalized_file="$artifact_dir/${FLUTTER_CANDIDATE}.handoff.json"
+qualification_file="$artifact_dir/${FLUTTER_CANDIDATE}.qualification.json"
 status_file="$artifact_dir/runner-status.json"
 
-# Execute the network-facing parts deterministically with bounded requests.
+# Network-facing evidence collection is deterministic and independently bounded.
 set +e
 timeout --signal=TERM --kill-after=10s 90s \
   python3 tests/pi/live/collect_official_flutter_search_evidence.py \
-    "$FLUTTER_CANDIDATE" "$evidence_file"
-collector_exit=$?
+    "$FLUTTER_CANDIDATE" "$official_evidence_file"
+official_collector_exit=$?
+
+timeout --signal=TERM --kill-after=10s 90s \
+  python3 tests/pi/live/collect_flutter_candidate_activity_evidence.py \
+    "$FLUTTER_CANDIDATE" "$activity_evidence_file"
+activity_collector_exit=$?
 set -e
 
-if [[ "$collector_exit" -ne 0 || ! -s "$evidence_file" ]]; then
+if [[ "$official_collector_exit" -ne 0 || ! -s "$official_evidence_file" ]]; then
   : > "$output_file"
   python3 tests/pi/live/normalize_official_flutter_result.py \
-    "$FLUTTER_CANDIDATE" 125 "$evidence_file" "$output_file" "$normalized_file"
-  printf '{"candidate":"%s","collector_exit":%s,"pi_exit":null,"normalized":true}\n' \
-    "$FLUTTER_CANDIDATE" "$collector_exit" > "$status_file"
-  echo "Evidence collector failed; normalized result is inconclusive."
-  exit 0
-fi
-
-evidence="$(cat "$evidence_file")"
-prompt="/skill:flutter-library-search 请严格依据已加载的 CPF-Flutter 官方 flutter-library-search Skill，对 Flutter 包 ${FLUTTER_CANDIDATE} 进行鸿蒙支持状态判断。
+    "$FLUTTER_CANDIDATE" 125 "$official_evidence_file" "$output_file" "$normalized_file"
+  pi_exit=125
+else
+  evidence="$(cat "$official_evidence_file")"
+  prompt="/skill:flutter-library-search 请严格依据已加载的 CPF-Flutter 官方 flutter-library-search Skill，对 Flutter 包 ${FLUTTER_CANDIDATE} 进行鸿蒙支持状态判断。
 
 本次所有网络事实已经由确定性采集器提供。禁止再次联网或调用工具，只能使用下面的 LIVE_EVIDENCE_JSON。不要凭记忆补充事实。
 
@@ -91,25 +94,38 @@ LIVE_EVIDENCE_JSON:
 ${evidence}
 \`\`\`"
 
-set +e
-timeout --signal=TERM --kill-after=10s 75s \
-  pi \
-    --provider agnes-cn \
-    --model "$PI_MODEL" \
-    --no-session \
-    --no-tools \
-    --skill "$vendor_dir/flutter-library-search/SKILL.md" \
-    -p "$prompt" \
-  | tee "$output_file"
-pi_exit=${PIPESTATUS[0]}
-set -e
+  set +e
+  timeout --signal=TERM --kill-after=10s 75s \
+    pi \
+      --provider agnes-cn \
+      --model "$PI_MODEL" \
+      --no-session \
+      --no-tools \
+      --skill "$vendor_dir/flutter-library-search/SKILL.md" \
+      -p "$prompt" \
+    | tee "$output_file"
+  pi_exit=${PIPESTATUS[0]}
+  set -e
 
-python3 tests/pi/live/normalize_official_flutter_result.py \
-  "$FLUTTER_CANDIDATE" "$pi_exit" "$evidence_file" "$output_file" "$normalized_file"
+  python3 tests/pi/live/normalize_official_flutter_result.py \
+    "$FLUTTER_CANDIDATE" "$pi_exit" "$official_evidence_file" "$output_file" "$normalized_file"
+fi
 
-printf '{"candidate":"%s","collector_exit":%s,"pi_exit":%s,"normalized":true}\n' \
-  "$FLUTTER_CANDIDATE" "$collector_exit" "$pi_exit" > "$status_file"
+qualification_built=false
+if [[ "$activity_collector_exit" -eq 0 && -s "$activity_evidence_file" && -s "$normalized_file" ]]; then
+  python3 scripts/qualification/build_candidate_qualification.py \
+    --framework flutter \
+    --candidate "$FLUTTER_CANDIDATE" \
+    --discovery-evidence "$activity_evidence_file" \
+    --official-handoff "$normalized_file" \
+    --output "$qualification_file"
+  qualification_built=true
+fi
 
-# Observational smoke: artifacts preserve evidence + official Skill judgment +
-# normalized handoff. Machine promotion/demotion semantics are enforced separately.
+printf '{"candidate":"%s","official_collector_exit":%s,"activity_collector_exit":%s,"pi_exit":%s,"normalized":true,"qualification_built":%s}\n' \
+  "$FLUTTER_CANDIDATE" "$official_collector_exit" "$activity_collector_exit" "$pi_exit" "$qualification_built" \
+  > "$status_file"
+
+# Observational smoke: artifacts preserve both evidence sets, official judgment,
+# normalized handoff, and the deterministic final qualification artifact.
 exit 0
