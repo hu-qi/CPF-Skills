@@ -5,13 +5,12 @@ import gzip
 import json
 import re
 import sys
-import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
 
-USER_AGENT = "CPF-Skills-CI/0.1 (+https://github.com/hu-qi/CPF-Skills)"
+USER_AGENT = "CPF-Skills-CI/0.2 (+https://github.com/hu-qi/CPF-Skills)"
 HTTP_TIMEOUT = 10
 KEYWORDS = (
     "file",
@@ -127,6 +126,38 @@ def fetch_score(name: str) -> dict[str, Any] | None:
     }
 
 
+def fetch_package_profile(name: str) -> dict[str, Any] | None:
+    url = f"https://pub.dev/api/packages/{urllib.parse.quote(name)}"
+    try:
+        data = http_json(url)
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    latest = data.get("latest") if isinstance(data.get("latest"), dict) else {}
+    pubspec = latest.get("pubspec") if isinstance(latest.get("pubspec"), dict) else {}
+    flutter = pubspec.get("flutter") if isinstance(pubspec.get("flutter"), dict) else {}
+    plugin = flutter.get("plugin") if isinstance(flutter.get("plugin"), dict) else {}
+    plugin_platforms = plugin.get("platforms") if isinstance(plugin.get("platforms"), dict) else {}
+    dependencies = pubspec.get("dependencies") if isinstance(pubspec.get("dependencies"), dict) else {}
+
+    repository = pubspec.get("repository") or pubspec.get("homepage")
+    direct_plugin = bool(plugin) and bool(plugin_platforms)
+    native_signal = any(platform in plugin_platforms for platform in ("android", "ios"))
+
+    return {
+        "name": name,
+        "version": pubspec.get("version"),
+        "repository": repository if isinstance(repository, str) else None,
+        "dependencies": sorted(str(key) for key in dependencies),
+        "direct_flutter_plugin": direct_plugin,
+        "plugin_platforms": sorted(str(key) for key in plugin_platforms),
+        "native_plugin_signal": native_signal,
+        "pub_dev_api_url": url,
+    }
+
+
 def collect_pub_candidates(pub_url: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     completion_url = urllib.parse.urljoin(
         pub_url.rstrip("/") + "/", "api/package-name-completion-data"
@@ -146,7 +177,7 @@ def collect_pub_candidates(pub_url: str) -> tuple[list[dict[str, Any]], dict[str
 
     keyword_names = [
         name for name in names if any(keyword in name.lower() for keyword in KEYWORDS)
-    ][:80]
+    ][:100]
 
     scored: list[dict[str, Any]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -166,23 +197,43 @@ def collect_pub_candidates(pub_url: str) -> tuple[list[dict[str, Any]], dict[str
         item
         for item in scored
         if "sdk:flutter" in item.get("tags", [])
-        and any(
-            tag in item.get("tags", [])
-            for tag in ("platform:android", "platform:ios")
-        )
+        and any(tag in item.get("tags", []) for tag in ("platform:android", "platform:ios"))
     ]
     scored.sort(key=rank, reverse=True)
-    for item in scored:
-        item["pub_dev_url"] = f"https://pub.dev/packages/{urllib.parse.quote(item['name'])}"
 
-    return scored[:12], {
+    # Platform support tags do NOT imply native code. Inspect the pubspec plugin
+    # declaration before promoting a package into the expensive candidate set.
+    profile_targets = scored[:50]
+    profiles: dict[str, dict[str, Any]] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        for profile in executor.map(fetch_package_profile, [item["name"] for item in profile_targets]):
+            if profile:
+                profiles[str(profile["name"])] = profile
+
+    direct_plugins: list[dict[str, Any]] = []
+    for item in profile_targets:
+        profile = profiles.get(str(item["name"]))
+        if not profile:
+            continue
+        if not profile.get("direct_flutter_plugin") or not profile.get("native_plugin_signal"):
+            continue
+        enriched = {**item, **profile}
+        enriched["pub_dev_url"] = f"https://pub.dev/packages/{urllib.parse.quote(str(item['name']))}"
+        direct_plugins.append(enriched)
+
+    direct_plugins.sort(key=rank, reverse=True)
+    return direct_plugins[:12], {
         "name": "pub.dev",
         "url": pub_url,
         "required": False,
         "result": "checked",
         "completion_url": completion_url,
         "keyword_match_count": len(keyword_names),
-        "candidate_count": len(scored),
+        "flutter_platform_candidate_count": len(scored),
+        "profiled_candidate_count": len(profile_targets),
+        "direct_native_plugin_count": len(direct_plugins),
+        "candidate_count": min(len(direct_plugins), 12),
+        "note": "Candidates are prioritized only when pubspec declares a direct Flutter plugin with Android/iOS platform entries; platform support tags alone are not treated as adaptation necessity.",
     }
 
 
@@ -244,8 +295,48 @@ def collect_org_repos(source: dict[str, Any]) -> tuple[dict[str, Any], list[str]
     }, repo_names
 
 
-def normalize(value: str) -> str:
+def normalized_package_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def canonical_repo_name(value: str) -> str:
+    name = re.sub(r"[-.]+", "_", value.lower()).strip("_")
+    prefixes = (
+        "fluttertpc_",
+        "flutter_tpc_",
+        "openharmony_",
+        "harmonyos_",
+        "harmony_",
+        "ohos_",
+        "flutter_",
+    )
+    suffixes = ("_openharmony", "_harmonyos", "_harmony", "_ohos")
+
+    changed = True
+    while changed:
+        changed = False
+        for prefix in prefixes:
+            if name.startswith(prefix) and len(name) > len(prefix):
+                name = name[len(prefix):]
+                changed = True
+                break
+
+    changed = True
+    while changed:
+        changed = False
+        for suffix in suffixes:
+            if name.endswith(suffix) and len(name) > len(suffix):
+                name = name[: -len(suffix)]
+                changed = True
+                break
+
+    return normalized_package_name(name)
+
+
+def repo_matches_package(package_name: str, repo_name: str) -> bool:
+    package = normalized_package_name(package_name)
+    repository = canonical_repo_name(repo_name)
+    return bool(package) and package == repository
 
 
 def main() -> None:
@@ -263,7 +354,7 @@ def main() -> None:
 
     candidates, pub_status = collect_pub_candidates(str(pub_source["url"]))
     if not candidates:
-        raise RuntimeError(f"No Flutter candidates collected from pub.dev: {pub_status}")
+        raise RuntimeError(f"No direct Flutter plugin candidates collected from pub.dev: {pub_status}")
 
     checked_sources: list[dict[str, Any]] = [pub_status]
     repo_names_by_source: dict[str, list[str]] = {}
@@ -283,7 +374,7 @@ def main() -> None:
                 {
                     **source,
                     "result": "partial",
-                    "note": "public page fetched; positive text matches are usable, absence is not exhaustive",
+                    "note": "public page fetched; positive exact package-name matches are usable, absence is not exhaustive",
                 }
             )
             page_text_by_source[source_name] = text
@@ -298,15 +389,13 @@ def main() -> None:
 
     for candidate in candidates:
         name = str(candidate["name"])
-        norm = normalize(name)
         matches: list[dict[str, str]] = []
         for source in dedup_sources:
             source_name = str(source["name"])
             for repo_name in repo_names_by_source.get(source_name, []):
-                repo_norm = normalize(repo_name)
-                if norm and (norm == repo_norm or norm in repo_norm or repo_norm in norm):
+                if repo_matches_package(name, repo_name):
                     matches.append(
-                        {"source": source_name, "match": repo_name, "kind": "repository_name"}
+                        {"source": source_name, "match": repo_name, "kind": "canonical_repository_name"}
                     )
             page_text = page_text_by_source.get(source_name, "")
             if page_text and re.search(
@@ -318,7 +407,7 @@ def main() -> None:
         candidate["dedup_matches"] = matches
 
     evidence = {
-        "schema_version": 1,
+        "schema_version": 2,
         "framework": "flutter",
         "official_skill_checks": {
             "flutter-library-search": "not_run",
@@ -328,6 +417,8 @@ def main() -> None:
             "network_timeout_seconds": HTTP_TIMEOUT,
             "candidate_keywords": list(KEYWORDS),
             "candidate_limit": 12,
+            "direct_plugin_prefilter": True,
+            "dedup_identity_policy": "canonical exact match; arbitrary substring matching is forbidden",
             "note": "Absence from partial/unavailable sources is not proof that no adaptation exists.",
         },
         "candidates": candidates,
