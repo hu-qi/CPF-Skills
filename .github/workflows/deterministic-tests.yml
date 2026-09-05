@@ -9,6 +9,7 @@ on:
       - "tests/pi/live/collect_flutter_evidence.py"
       - "tests/pi/live/collect_official_flutter_search_evidence.py"
       - "tests/pi/live/normalize_official_flutter_result.py"
+      - "scripts/qualification/**"
       - ".github/workflows/deterministic-tests.yml"
   pull_request:
     paths:
@@ -16,6 +17,7 @@ on:
       - "tests/pi/live/collect_flutter_evidence.py"
       - "tests/pi/live/collect_official_flutter_search_evidence.py"
       - "tests/pi/live/normalize_official_flutter_result.py"
+      - "scripts/qualification/**"
       - ".github/workflows/deterministic-tests.yml"
   workflow_dispatch:
 
