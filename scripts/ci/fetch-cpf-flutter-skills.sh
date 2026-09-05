@@ -16,6 +16,8 @@ required_skills=(
   "ohos-flutter-plugin-adaptation-necessity-check"
 )
 
+mkdir -p .artifacts/official-skills/snapshots
+
 for skill in "${required_skills[@]}"; do
   path="$ROOT_DIR/$skill/SKILL.md"
   if [[ ! -s "$path" ]]; then
@@ -23,12 +25,12 @@ for skill in "${required_skills[@]}"; do
     exit 1
   fi
   echo "Found official Skill: $skill"
+  cp "$path" ".artifacts/official-skills/snapshots/${skill}.SKILL.md"
 done
 
 commit_sha="$(git -C "$ROOT_DIR" rev-parse HEAD)"
 echo "CPF-Flutter skills commit: $commit_sha"
 
-mkdir -p .artifacts/official-skills
 cat > .artifacts/official-skills/cpf-flutter.json <<JSON
 {
   "repository": "$REPO_URL",
