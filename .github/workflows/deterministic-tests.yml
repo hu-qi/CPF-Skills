@@ -1,0 +1,40 @@
+name: Deterministic Discovery Tests
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/unit/**"
+      - "tests/pi/live/collect_flutter_evidence.py"
+      - "tests/pi/live/collect_official_flutter_search_evidence.py"
+      - "tests/pi/live/normalize_official_flutter_result.py"
+      - ".github/workflows/deterministic-tests.yml"
+  pull_request:
+    paths:
+      - "tests/unit/**"
+      - "tests/pi/live/collect_flutter_evidence.py"
+      - "tests/pi/live/collect_official_flutter_search_evidence.py"
+      - "tests/pi/live/normalize_official_flutter_result.py"
+      - ".github/workflows/deterministic-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discovery-helpers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run deterministic regressions
+        run: python3 tests/unit/test_discovery_helpers.py
