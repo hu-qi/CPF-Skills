@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,19 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def extract_json_text(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("{"):
+        return stripped
+
+    match = re.fullmatch(r"```(?:json)?\s*(\{.*\})\s*```", stripped, flags=re.DOTALL)
+    if match:
+        return match.group(1).strip()
+
+    fail("output must be a JSON object, optionally wrapped in one fenced code block")
+    raise AssertionError("unreachable")
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         fail("usage: assert_discovery_contract.py <pi-output-file>")
@@ -33,14 +47,15 @@ def main() -> None:
     if not output_path.exists():
         fail(f"missing output file: {output_path}")
 
-    text = output_path.read_text(encoding="utf-8", errors="replace").strip()
-    if not text:
+    text = output_path.read_text(encoding="utf-8", errors="replace")
+    if not text.strip():
         fail("Pi returned empty output")
 
+    json_text = extract_json_text(text)
     try:
-        payload = json.loads(text)
+        payload = json.loads(json_text)
     except json.JSONDecodeError as exc:
-        fail(f"output must be a single JSON object: {exc}")
+        fail(f"invalid JSON: {exc}")
 
     if not isinstance(payload, dict) or set(payload) != {"results"}:
         fail("top-level JSON must contain only the 'results' field")
