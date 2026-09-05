@@ -16,7 +16,9 @@ required_skills=(
   "ohos-flutter-plugin-adaptation-necessity-check"
 )
 
-mkdir -p .artifacts/official-skills/snapshots
+snapshot_root=".artifacts/official-skills/snapshots"
+rm -rf "$snapshot_root"
+mkdir -p "$snapshot_root"
 
 for skill in "${required_skills[@]}"; do
   path="$ROOT_DIR/$skill/SKILL.md"
@@ -24,8 +26,14 @@ for skill in "${required_skills[@]}"; do
     echo "::error::Required CPF-Flutter Skill missing: $path"
     exit 1
   fi
+
   echo "Found official Skill: $skill"
-  cp "$path" ".artifacts/official-skills/snapshots/${skill}.SKILL.md"
+  mkdir -p "$snapshot_root/$skill"
+  cp "$path" "$snapshot_root/$skill/SKILL.md"
+
+  if [[ -d "$ROOT_DIR/$skill/references" ]]; then
+    cp -R "$ROOT_DIR/$skill/references" "$snapshot_root/$skill/references"
+  fi
 done
 
 commit_sha="$(git -C "$ROOT_DIR" rev-parse HEAD)"
