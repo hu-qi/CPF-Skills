@@ -37,12 +37,15 @@ output_file=".artifacts/pi-live/flutter-discovery-${PI_MODEL}.md"
 case_prompt="$(cat tests/pi/live/flutter-discovery.prompt.md)"
 prompt="/skill:thirdparty-library-discovery ${case_prompt}"
 
-pi \
-  --provider agnes-cn \
-  --model "$PI_MODEL" \
-  --no-session \
-  --skill .atomcode/skills/thirdparty-library-discovery/SKILL.md \
-  -p "$prompt" \
+# Bound the whole agent run so a slow external source cannot pin a CI runner.
+# timeout exits with 124; the artifact upload step still preserves any partial output.
+timeout --signal=TERM --kill-after=15s 5m \
+  pi \
+    --provider agnes-cn \
+    --model "$PI_MODEL" \
+    --no-session \
+    --skill .atomcode/skills/thirdparty-library-discovery/SKILL.md \
+    -p "$prompt" \
   | tee "$output_file"
 
 python3 tests/pi/live/assert_flutter_discovery.py "$output_file"
