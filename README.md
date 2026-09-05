@@ -89,6 +89,31 @@ $thirdparty-library-discovery 帮我找 10 个 Flutter 候选库
 
 具体调用关系和能力映射维护在 `resources/frameworks.yaml`。尚未完成官方仓库审计的 Skill 名称不会凭记忆写入配置。
 
+## Pi CI 契约测试
+
+仓库使用 Pi 对 Skill 的核心行为做模型回归测试。当前工作流：
+
+```text
+.github/workflows/pi-skill-test.yml
+```
+
+测试矩阵同时运行：
+
+- `agnes-2.5-flash`
+- `agnes-2.5-pro`
+
+通过中国区 OpenAI-compatible 网关 `https://api.agnes-ai.cn/v1` 调用。API Key **不得提交到仓库**，请在 GitHub 仓库中配置 Repository Secret：
+
+```text
+AGNES_API_KEY
+```
+
+当前测试属于**离线契约测试**：同一条固定 fixture 同时验证 `NEEDS_OFFICIAL_CHECK`、`EXCLUDED_ALREADY_ADAPTED`、`EXCLUDED_NO_ADAPTATION_NEEDED` 三条核心状态迁移，不依赖实时包中心或社区仓搜索，因此适合作为 PR 回归检查。
+
+Pi 在 CI 中通过 `--skill .atomcode/skills/thirdparty-library-discovery/SKILL.md` 显式加载 AtomCode Skill，从而避免复制两份 Skill 源文件。模型输出保存在 Actions artifact 中，便于比较 Flash 与 Pro 的行为差异。
+
+> Fork PR 默认拿不到 Repository Secrets，因此工作流只在手动触发或仓库内 PR 上运行模型测试。
+
 ## 当前目录
 
 ```text
@@ -98,12 +123,22 @@ CPF-Skills/
 │   └── skills/
 │       └── thirdparty-library-discovery/
 │           └── SKILL.md
+├── .github/
+│   └── workflows/
+│       └── pi-skill-test.yml
 ├── resources/
 │   └── frameworks.yaml
+├── scripts/
+│   └── ci/
+│       └── test-pi-skill.sh
+├── tests/
+│   └── pi/
+│       ├── discovery-contract.prompt.md
+│       └── assert_discovery_contract.py
 └── README.md
 ```
 
-采用 `.atomcode/skills/` 是为了让 AtomCode 在当前项目中直接发现项目级 Skill；后续如果需要作为 Plugin/Marketplace 分发，再增加对应插件清单，不提前引入额外封装。
+采用 `.atomcode/skills/` 是为了让 AtomCode 在当前项目中直接发现项目级 Skill；Pi 测试通过 `--skill` 直接加载同一个 `SKILL.md`。后续如果需要作为 Plugin/Marketplace 分发，再增加对应插件清单，不提前引入额外封装。
 
 ## 框架支持状态
 
@@ -125,6 +160,9 @@ CPF-Skills/
 - [x] 设计 `thirdparty-library-discovery` 输入、输出和判定流程
 - [x] 建立 `frameworks.yaml`，维护框架与官方资源路由
 - [x] 实现 Flutter 候选发现流程 v0.1
+- [x] 建立 Pi + Agnes 双模型离线契约测试
+- [ ] 配置仓库 `AGNES_API_KEY` Secret 并跑通首次 CI
+- [ ] 增加真实 Flutter 候选发现的 live/e2e 测试
 - [ ] 用真实 Flutter 选库任务跑一轮 v0.1，并根据结果修订 Skill
 - [ ] 审计 CPF-RN 官方 Skills，补齐 RN 能力路由
 - [ ] 审计 CPF-ApplicationTPC 官方 Skills，补齐 ArkTS/C/C++ 能力路由
@@ -135,12 +173,6 @@ CPF-Skills/
 
 ## 下一步
 
-不要立即继续扩框架。下一步应使用 `thirdparty-library-discovery` **真实跑一轮 Flutter 选库**，目标输出 5-10 个候选，并检查：
+先在 GitHub 仓库中配置 `AGNES_API_KEY` Repository Secret，然后手动运行 `Pi Skill Contract Tests`，确认 `agnes-2.5-flash` 与 `agnes-2.5-pro` 均通过同一套契约测试。
 
-1. 候选来源是否足够好；
-2. 去重流程是否会产生误判；
-3. 官方 Skill 不可用时，`NEEDS_OFFICIAL_CHECK` 是否足够清楚；
-4. 评分是否真的有区分度；
-5. 最终结果能否直接帮助用户确定一个适配选题。
-
-用真实结果反推 v0.2，比继续堆规则更有价值。
+通过后再增加 live/e2e 测试：让 Pi 实际执行一次 Flutter 候选发现，检查候选来源、去重证据、官方 Skill 路由、评分区分度以及最终推荐是否可用。离线契约测试负责稳定回归，live/e2e 负责验证真实效果，两者职责分开。
