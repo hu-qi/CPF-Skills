@@ -21,7 +21,6 @@ config = {
         "agnes-cn": {
             "baseUrl": os.environ["AGNES_BASE_URL"],
             "api": "openai-completions",
-            # Keep the key as an environment reference. Never materialize it in a repo file.
             "apiKey": "$AGNES_API_KEY",
             "authHeader": True,
             "models": [
@@ -33,19 +32,33 @@ config = {
 path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
-output_file=".artifacts/pi/discovery-contract-${PI_MODEL}.md"
-case_prompt="$(cat tests/pi/discovery-contract.prompt.md)"
+run_contract() {
+  local name="$1"
+  local prompt_file="$2"
+  local assert_script="$3"
+  local output_file=".artifacts/pi/${name}-${PI_MODEL}.md"
+  local case_prompt
+  case_prompt="$(cat "$prompt_file")"
 
-# --skill registers the skill with Pi. /skill:<name> forces Pi to load the full
-# SKILL.md before executing the test case instead of relying on model-triggered loading.
-prompt="/skill:thirdparty-library-discovery ${case_prompt}"
+  local prompt="/skill:thirdparty-library-discovery ${case_prompt}"
 
-pi \
-  --provider agnes-cn \
-  --model "$PI_MODEL" \
-  --no-session \
-  --skill .atomcode/skills/thirdparty-library-discovery/SKILL.md \
-  -p "$prompt" \
-  | tee "$output_file"
+  pi \
+    --provider agnes-cn \
+    --model "$PI_MODEL" \
+    --no-session \
+    --skill .atomcode/skills/thirdparty-library-discovery/SKILL.md \
+    -p "$prompt" \
+    | tee "$output_file"
 
-python3 tests/pi/assert_discovery_contract.py "$output_file"
+  python3 "$assert_script" "$output_file"
+}
+
+run_contract \
+  "discovery-contract" \
+  "tests/pi/discovery-contract.prompt.md" \
+  "tests/pi/assert_discovery_contract.py"
+
+run_contract \
+  "official-handoff-contract" \
+  "tests/pi/official-handoff-contract.prompt.md" \
+  "tests/pi/assert_official_handoff_contract.py"
