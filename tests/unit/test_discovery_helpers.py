@@ -23,6 +23,10 @@ official = load_module(
     "collect_official_flutter_search_evidence",
     "tests/pi/live/collect_official_flutter_search_evidence.py",
 )
+qualification = load_module(
+    "build_candidate_qualification",
+    "scripts/qualification/build_candidate_qualification.py",
+)
 
 
 def test_dedup_identity() -> None:
@@ -96,17 +100,128 @@ def test_pubspec_name_parser(tmp_path: Path) -> None:
     assert official.pubspec_name(pubspec) == "cached_network_image"
 
 
+def discovery_fixture(*, required_result: str = "checked", matches: list[dict[str, str]] | None = None) -> dict:
+    return {
+        "framework": "flutter",
+        "candidates": [
+            {
+                "name": "ExamplePlugin",
+                "repository": "https://example.invalid/ExamplePlugin",
+                "dedup_matches": matches or [],
+            }
+        ],
+        "checked_sources": [
+            {
+                "name": "CPF-Flutter",
+                "url": "https://atomgit.com/CPF-Flutter",
+                "required": True,
+                "result": "checked",
+            },
+            {
+                "name": "hxa-flutter",
+                "url": "https://atomgit.com/hxa-flutter",
+                "required": True,
+                "result": required_result,
+            },
+        ],
+    }
+
+
+def handoff_fixture(*, library_result: str, necessity_result: str = "not_run") -> dict:
+    return {
+        "candidate": "ExamplePlugin",
+        "official_checks": {
+            "library_search": {
+                "skill": "flutter-library-search",
+                "result": library_result,
+                "evidence": [],
+                "reason": "fixture",
+                "pending_checks": [],
+            },
+            "adaptation_necessity": {
+                "skill": "ohos-flutter-plugin-adaptation-necessity-check",
+                "result": necessity_result,
+                "evidence": [],
+                "reason": "fixture",
+            },
+        },
+    }
+
+
+def qualification_status(discovery_data: dict, handoff: dict | None) -> str:
+    artifact = qualification.build_artifact(
+        framework="flutter",
+        candidate_name="ExamplePlugin",
+        discovery=discovery_data,
+        handoff=handoff,
+    )
+    return artifact["qualification"]["status"]
+
+
+def test_candidate_qualification_states() -> None:
+    assert qualification_status(
+        discovery_fixture(),
+        handoff_fixture(library_result="needs_adaptation"),
+    ) == "RECOMMENDED"
+
+    assert qualification_status(
+        discovery_fixture(required_result="partial"),
+        handoff_fixture(library_result="needs_adaptation"),
+    ) == "NEEDS_OFFICIAL_CHECK"
+
+    assert qualification_status(
+        discovery_fixture(),
+        handoff_fixture(library_result="adapted", necessity_result="needed"),
+    ) == "EXCLUDED_ALREADY_ADAPTED"
+
+    assert qualification_status(
+        discovery_fixture(),
+        handoff_fixture(library_result="no_adaptation_needed"),
+    ) == "EXCLUDED_NO_ADAPTATION_NEEDED"
+
+    assert qualification_status(
+        discovery_fixture(
+            matches=[
+                {
+                    "source": "CPF-Flutter",
+                    "match": "fluttertpc_ExamplePlugin",
+                    "kind": "canonical_repository_name",
+                }
+            ]
+        ),
+        handoff_fixture(library_result="needs_adaptation"),
+    ) == "EXCLUDED_ALREADY_ADAPTED"
+
+    assert qualification_status(discovery_fixture(), None) == "NEEDS_OFFICIAL_CHECK"
+
+
+def test_missing_candidate_is_unverifiable() -> None:
+    artifact = qualification.build_artifact(
+        framework="flutter",
+        candidate_name="MissingPlugin",
+        discovery=discovery_fixture(),
+        handoff=None,
+    )
+    assert artifact["qualification"]["status"] == "EXCLUDED_UNVERIFIABLE"
+    assert artifact["qualification"]["eligible_to_start_adaptation"] is False
+
+
 def main() -> None:
     test_dedup_identity()
     test_result_specific_guardrails()
     test_positive_adaptation_evidence()
+    test_candidate_qualification_states()
+    test_missing_candidate_is_unverifiable()
 
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
         test_pubspec_name_parser(Path(tmp))
 
-    print("DETERMINISTIC TESTS PASSED: discovery helpers and official handoff guardrails")
+    print(
+        "DETERMINISTIC TESTS PASSED: discovery helpers, official handoff guardrails, "
+        "and candidate qualification states"
+    )
 
 
 if __name__ == "__main__":
