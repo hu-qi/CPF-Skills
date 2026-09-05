@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
-
 
 EXPECTED = {
     "AlphaPlugin": "NEEDS_OFFICIAL_CHECK",
@@ -25,29 +25,6 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-def normalize_cell(cell: str) -> str:
-    return cell.strip().strip("`").strip()
-
-
-def parse_candidate_statuses(text: str) -> dict[str, str]:
-    rows: dict[str, str] = {}
-
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not (line.startswith("|") and line.endswith("|")):
-            continue
-
-        cells = [normalize_cell(cell) for cell in line.strip("|").split("|")]
-        if len(cells) < 3:
-            continue
-
-        candidate, status = cells[0], cells[1]
-        if candidate in EXPECTED:
-            rows[candidate] = status
-
-    return rows
-
-
 def main() -> None:
     if len(sys.argv) != 2:
         fail("usage: assert_discovery_contract.py <pi-output-file>")
@@ -56,26 +33,51 @@ def main() -> None:
     if not output_path.exists():
         fail(f"missing output file: {output_path}")
 
-    text = output_path.read_text(encoding="utf-8", errors="replace")
-    if not text.strip():
+    text = output_path.read_text(encoding="utf-8", errors="replace").strip()
+    if not text:
         fail("Pi returned empty output")
 
-    rows = parse_candidate_statuses(text)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        fail(f"output must be a single JSON object: {exc}")
+
+    if not isinstance(payload, dict) or set(payload) != {"results"}:
+        fail("top-level JSON must contain only the 'results' field")
+
+    results = payload.get("results")
+    if not isinstance(results, list) or len(results) != len(EXPECTED):
+        fail(f"results must contain exactly {len(EXPECTED)} items")
+
+    actual: dict[str, str] = {}
+    for index, item in enumerate(results, start=1):
+        if not isinstance(item, dict):
+            fail(f"result #{index} must be an object")
+        if set(item) != {"candidate", "status", "reason"}:
+            fail(f"result #{index} must contain candidate/status/reason only")
+
+        candidate = item.get("candidate")
+        status = item.get("status")
+        reason = item.get("reason")
+
+        if not isinstance(candidate, str) or candidate not in EXPECTED:
+            fail(f"unexpected candidate {candidate!r}")
+        if candidate in actual:
+            fail(f"duplicate candidate {candidate}")
+        if status not in ALLOWED_STATUSES:
+            fail(f"{candidate}: invalid status token {status!r}")
+        if not isinstance(reason, str) or not reason.strip():
+            fail(f"{candidate}: reason must be a non-empty string")
+
+        actual[candidate] = status
+
+    if set(actual) != set(EXPECTED):
+        fail(f"candidate set mismatch: actual={sorted(actual)} expected={sorted(EXPECTED)}")
 
     for candidate, expected_status in EXPECTED.items():
-        if candidate not in rows:
-            fail(f"candidate {candidate} not found in a Markdown table row")
-
-        actual_status = rows[candidate]
-        if actual_status not in ALLOWED_STATUSES:
+        if actual[candidate] != expected_status:
             fail(
-                f"{candidate} returned non-canonical status token {actual_status!r}; "
-                f"allowed={sorted(ALLOWED_STATUSES)}"
-            )
-
-        if actual_status != expected_status:
-            fail(
-                f"{candidate} must be {expected_status}; actual status was {actual_status}"
+                f"{candidate} must be {expected_status}; actual status was {actual[candidate]}"
             )
 
     print("CONTRACT PASSED: discovery state machine matches expected outcomes")
