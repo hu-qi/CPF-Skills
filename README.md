@@ -97,10 +97,9 @@ $thirdparty-library-discovery 帮我找 10 个 Flutter 候选库
 .github/workflows/pi-skill-test.yml
 ```
 
-测试矩阵同时运行：
+当前只运行：
 
 - `agnes-2.5-flash`
-- `agnes-2.5-pro`
 
 通过中国区 OpenAI-compatible 网关 `https://api.agnes-ai.cn/v1` 调用。API Key **不得提交到仓库**，请在 GitHub 仓库中配置 Repository Secret：
 
@@ -108,11 +107,26 @@ $thirdparty-library-discovery 帮我找 10 个 Flutter 候选库
 AGNES_API_KEY
 ```
 
-当前测试属于**离线契约测试**：同一条固定 fixture 同时验证 `NEEDS_OFFICIAL_CHECK`、`EXCLUDED_ALREADY_ADAPTED`、`EXCLUDED_NO_ADAPTATION_NEEDED` 三条核心状态迁移，不依赖实时包中心或社区仓搜索，因此适合作为 PR 回归检查。
+当前离线契约测试使用固定 fixture 验证 `NEEDS_OFFICIAL_CHECK`、`EXCLUDED_ALREADY_ADAPTED`、`EXCLUDED_NO_ADAPTATION_NEEDED` 三条核心状态迁移，不依赖实时包中心或社区仓搜索，因此适合作为 PR 回归检查。
 
-Pi 在 CI 中通过 `--skill .atomcode/skills/thirdparty-library-discovery/SKILL.md` 显式加载 AtomCode Skill，从而避免复制两份 Skill 源文件。模型输出保存在 Actions artifact 中，便于比较 Flash 与 Pro 的行为差异。
+Pi 在 CI 中通过 `--skill .atomcode/skills/thirdparty-library-discovery/SKILL.md` 注册 Skill，并通过 `/skill:thirdparty-library-discovery` 强制加载完整 Skill 内容。模型输出保存在 Actions artifact 中，便于排查状态机回归。
 
 > Fork PR 默认拿不到 Repository Secrets，因此工作流只在手动触发或仓库内 PR 上运行模型测试。
+
+## Live Flutter Discovery E2E
+
+独立工作流：
+
+```text
+.github/workflows/pi-live-discovery.yml
+```
+
+Live E2E 同样只运行 `agnes-2.5-flash`，并拆成两个阶段：
+
+1. 确定性 Python 采集器按短超时从 `resources/frameworks.yaml` 配置的当前来源获取 Flutter 候选和去重证据，保存为 `flutter-evidence.json`；
+2. Pi 以 `--no-tools` 模式读取这份 evidence snapshot，只负责按照 Skill 做状态判定和排序。
+
+这样可以把“外部来源访问失败”和“Skill 判断失败”区分开，并保留可审计的原始证据快照与模型输出。
 
 ## 当前目录
 
@@ -125,20 +139,26 @@ CPF-Skills/
 │           └── SKILL.md
 ├── .github/
 │   └── workflows/
-│       └── pi-skill-test.yml
+│       ├── pi-skill-test.yml
+│       └── pi-live-discovery.yml
 ├── resources/
 │   └── frameworks.yaml
 ├── scripts/
 │   └── ci/
-│       └── test-pi-skill.sh
+│       ├── test-pi-skill.sh
+│       └── test-pi-live-discovery.sh
 ├── tests/
 │   └── pi/
 │       ├── discovery-contract.prompt.md
-│       └── assert_discovery_contract.py
+│       ├── assert_discovery_contract.py
+│       └── live/
+│           ├── collect_flutter_evidence.py
+│           ├── flutter-discovery.prompt.md
+│           └── assert_flutter_discovery.py
 └── README.md
 ```
 
-采用 `.atomcode/skills/` 是为了让 AtomCode 在当前项目中直接发现项目级 Skill；Pi 测试通过 `--skill` 直接加载同一个 `SKILL.md`。后续如果需要作为 Plugin/Marketplace 分发，再增加对应插件清单，不提前引入额外封装。
+采用 `.atomcode/skills/` 是为了让 AtomCode 在当前项目中直接发现项目级 Skill；Pi 测试通过 `--skill` 加载同一个 `SKILL.md`。后续如果需要作为 Plugin/Marketplace 分发，再增加对应插件清单，不提前引入额外封装。
 
 ## 框架支持状态
 
@@ -160,9 +180,10 @@ CPF-Skills/
 - [x] 设计 `thirdparty-library-discovery` 输入、输出和判定流程
 - [x] 建立 `frameworks.yaml`，维护框架与官方资源路由
 - [x] 实现 Flutter 候选发现流程 v0.1
-- [x] 建立 Pi + Agnes 双模型离线契约测试
-- [ ] 配置仓库 `AGNES_API_KEY` Secret 并跑通首次 CI
-- [ ] 增加真实 Flutter 候选发现的 live/e2e 测试
+- [x] 建立 Pi + Agnes Flash 离线契约测试
+- [x] 配置仓库 `AGNES_API_KEY` Secret 并跑通首次 contract CI
+- [x] 增加真实 Flutter 候选发现的 live/e2e 测试框架
+- [ ] 跑通稳定的 live evidence 采集 + Skill 判定链路
 - [ ] 用真实 Flutter 选库任务跑一轮 v0.1，并根据结果修订 Skill
 - [ ] 审计 CPF-RN 官方 Skills，补齐 RN 能力路由
 - [ ] 审计 CPF-ApplicationTPC 官方 Skills，补齐 ArkTS/C/C++ 能力路由
@@ -173,6 +194,6 @@ CPF-Skills/
 
 ## 下一步
 
-先在 GitHub 仓库中配置 `AGNES_API_KEY` Repository Secret，然后手动运行 `Pi Skill Contract Tests`，确认 `agnes-2.5-flash` 与 `agnes-2.5-pro` 均通过同一套契约测试。
+先让 `Pi Live Flutter Discovery E2E` 在 `agnes-2.5-flash` 上稳定跑通，确认实时证据采集、必查去重源状态、规范状态 token 和最终候选结构都可审计。
 
-通过后再增加 live/e2e 测试：让 Pi 实际执行一次 Flutter 候选发现，检查候选来源、去重证据、官方 Skill 路由、评分区分度以及最终推荐是否可用。离线契约测试负责稳定回归，live/e2e 负责验证真实效果，两者职责分开。
+通过后，再用真实 Flutter 选库任务跑一轮 v0.1，并根据 live evidence 结果修订 Skill；随后推进 RN 与 ApplicationTPC 的官方 Skills 审计。
