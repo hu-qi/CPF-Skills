@@ -23,6 +23,10 @@ official = load_module(
     "collect_official_flutter_search_evidence",
     "tests/pi/live/collect_official_flutter_search_evidence.py",
 )
+activity = load_module(
+    "collect_flutter_candidate_activity_evidence",
+    "tests/pi/live/collect_flutter_candidate_activity_evidence.py",
+)
 qualification = load_module(
     "build_candidate_qualification",
     "scripts/qualification/build_candidate_qualification.py",
@@ -98,6 +102,19 @@ def test_pubspec_name_parser(tmp_path: Path) -> None:
     pubspec = tmp_path / "pubspec.yaml"
     pubspec.write_text("name: cached_network_image\nversion: 1.0.0\n", encoding="utf-8")
     assert official.pubspec_name(pubspec) == "cached_network_image"
+
+
+def test_atomgit_blob_parser() -> None:
+    parsed = activity.atomgit_blob_spec(
+        "https://atomgit.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md"
+    )
+    assert parsed == (
+        "CPF-Flutter",
+        "docs",
+        "main",
+        "ThirdpartyLibrarites.md",
+    )
+    assert activity.atomgit_blob_spec("https://atomgit.com/CPF-Flutter") is None
 
 
 def discovery_fixture(*, required_result: str = "checked", matches: list[dict[str, str]] | None = None) -> dict:
@@ -210,6 +227,7 @@ def main() -> None:
     test_dedup_identity()
     test_result_specific_guardrails()
     test_positive_adaptation_evidence()
+    test_atomgit_blob_parser()
     test_candidate_qualification_states()
     test_missing_candidate_is_unverifiable()
 
@@ -220,7 +238,7 @@ def main() -> None:
 
     print(
         "DETERMINISTIC TESTS PASSED: discovery helpers, official handoff guardrails, "
-        "and candidate qualification states"
+        "activity source parsing, and candidate qualification states"
     )
 
 
