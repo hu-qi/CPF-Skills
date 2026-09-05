@@ -6,17 +6,19 @@ on:
     branches:
       - main
     paths:
-      - ".atomcode/skills/**"
-      - "resources/**"
-      - "tests/pi/**"
-      - "scripts/ci/**"
+      - ".atomcode/skills/thirdparty-library-discovery/**"
+      - "resources/frameworks.yaml"
+      - "tests/pi/discovery-contract.prompt.md"
+      - "tests/pi/assert_discovery_contract.py"
+      - "scripts/ci/test-pi-skill.sh"
       - ".github/workflows/pi-skill-test.yml"
   pull_request:
     paths:
-      - ".atomcode/skills/**"
-      - "resources/**"
-      - "tests/pi/**"
-      - "scripts/ci/**"
+      - ".atomcode/skills/thirdparty-library-discovery/**"
+      - "resources/frameworks.yaml"
+      - "tests/pi/discovery-contract.prompt.md"
+      - "tests/pi/assert_discovery_contract.py"
+      - "scripts/ci/test-pi-skill.sh"
       - ".github/workflows/pi-skill-test.yml"
 
 permissions:
