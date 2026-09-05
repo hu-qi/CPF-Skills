@@ -25,7 +25,6 @@ config = {
             "authHeader": True,
             "models": [
                 {"id": "agnes-2.5-flash", "name": "Agnes 2.5 Flash"},
-                {"id": "agnes-2.5-pro", "name": "Agnes 2.5 Pro"},
             ],
         }
     }
