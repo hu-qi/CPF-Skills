@@ -35,7 +35,11 @@ path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encodin
 PY
 
 output_file=".artifacts/pi/discovery-contract-${PI_MODEL}.md"
-prompt="$(cat tests/pi/discovery-contract.prompt.md)"
+case_prompt="$(cat tests/pi/discovery-contract.prompt.md)"
+
+# --skill registers the skill with Pi. /skill:<name> forces Pi to load the full
+# SKILL.md before executing the test case instead of relying on model-triggered loading.
+prompt="/skill:thirdparty-library-discovery ${case_prompt}"
 
 pi \
   --provider agnes-cn \
