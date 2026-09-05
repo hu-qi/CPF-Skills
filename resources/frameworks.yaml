@@ -1,0 +1,193 @@
+schema_version: 1
+
+# 这里只维护候选发现、去重和官方 Skill 路由所需的可变事实。
+# 版本号、SDK 版本等如果不是当前流程必需，不在这里提前固化；需要时应实时确认。
+
+frameworks:
+  flutter:
+    display_name: Flutter
+    aliases: [flutter]
+    discovery_status: supported
+    version_policy: latest
+    discovery_sources:
+      - name: pub.dev
+        url: https://pub.dev/
+        type: package_registry
+    dedup_sources:
+      - name: CPF-Flutter ThirdpartyLibrarites
+        url: https://atomgit.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md
+        required: true
+      - name: CPF-Flutter
+        url: https://atomgit.com/CPF-Flutter
+        required: true
+      - name: hxa-flutter
+        url: https://atomgit.com/hxa-flutter
+        required: true
+    official_skills:
+      repository: https://atomgit.com/CPF-Flutter/skills
+      library_search: flutter-library-search
+      adaptation_necessity_check: ohos-flutter-plugin-adaptation-necessity-check
+    community:
+      name: CPF-Flutter 鸿蒙社区
+      organization: https://atomgit.com/CPF-Flutter
+
+  react-native:
+    display_name: React Native
+    aliases: [rn, react-native, react_native]
+    discovery_status: experimental
+    version_policy: latest
+    discovery_sources:
+      - name: React Native Directory
+        url: https://reactnative.directory/
+        type: package_directory
+      - name: npm
+        url: https://www.npmjs.com/
+        type: package_registry
+    dedup_sources:
+      - name: CPF-RN
+        url: https://atomgit.com/CPF-RN
+        required: true
+      - name: hxa-rn
+        url: https://atomgit.com/hxa-rn
+        required: true
+    official_skills:
+      repository: https://atomgit.com/CPF-RN/skills
+      # 具体 Skill 名称在完成官方仓库能力审计后补充，避免凭记忆硬编码。
+    community:
+      name: CPF-RN 鸿蒙社区
+      organization: https://atomgit.com/CPF-RN
+
+  arkts:
+    display_name: ApplicationTPC (ArkTS)
+    aliases: [arkts, applicationtpc, applicationtpc-arkts]
+    discovery_status: experimental
+    version_policy: latest
+    discovery_sources:
+      - name: npm
+        url: https://www.npmjs.com/
+        type: package_registry
+    dedup_sources:
+      - name: CPF-ApplicationTPC
+        url: https://atomgit.com/CPF-ApplicationTPC
+        required: true
+    official_skills:
+      repository: https://atomgit.com/CPF-ApplicationTPC/skills
+      # 具体 Skill 名称在完成官方仓库能力审计后补充。
+    community:
+      name: CPF-ApplicationTPC 原生库社区
+      organization: https://atomgit.com/CPF-ApplicationTPC
+
+  cpp:
+    display_name: ApplicationTPC (C/C++)
+    aliases: [cpp, c++, c-cpp, applicationtpc-cpp]
+    discovery_status: experimental
+    version_policy: latest
+    discovery_sources:
+      - name: npm
+        url: https://www.npmjs.com/
+        type: package_registry
+    dedup_sources:
+      - name: CPF-ApplicationTPC
+        url: https://atomgit.com/CPF-ApplicationTPC
+        required: true
+    official_skills:
+      repository: https://atomgit.com/CPF-ApplicationTPC/skills
+    community:
+      name: CPF-ApplicationTPC 原生库社区
+      organization: https://atomgit.com/CPF-ApplicationTPC
+
+  kmp-cmp:
+    display_name: KMP / CMP
+    aliases: [kmp, cmp, kmp-cmp, kotlin-multiplatform, compose-multiplatform]
+    discovery_status: experimental
+    version_policy: latest
+    discovery_sources:
+      - name: Maven Repository
+        url: https://mvnrepository.com/
+        type: package_registry
+    dedup_sources:
+      - name: CPF-KMP-CMP
+        url: https://atomgit.com/CPF-KMP-CMP
+        required: true
+    official_skills: {}
+    community:
+      name: KMP&CMP 鸿蒙社区
+      organization: https://atomgit.com/CPF-KMP-CMP
+
+  cordova:
+    display_name: Cordova
+    aliases: [cordova]
+    discovery_status: experimental
+    version_policy: latest
+    discovery_sources:
+      - name: npm
+        url: https://www.npmjs.com/
+        type: package_registry
+    dedup_sources:
+      - name: CPF-Cordova
+        url: https://atomgit.com/CPF-Cordova
+        required: true
+    official_skills: {}
+    community:
+      name: CPF-Cordova 鸿蒙社区
+      organization: https://atomgit.com/CPF-Cordova
+
+  ionic:
+    display_name: Ionic
+    aliases: [ionic, capacitor]
+    discovery_status: experimental
+    version_policy: latest
+    discovery_sources:
+      - name: npm
+        url: https://www.npmjs.com/
+        type: package_registry
+    dedup_sources:
+      - name: CPF-Ionic
+        url: https://atomgit.com/CPF-Ionic
+        required: true
+    official_skills: {}
+    community:
+      name: CPF-Ionic 鸿蒙社区
+      organization: https://atomgit.com/CPF-Ionic
+
+  cjmp:
+    display_name: CJMP
+    aliases: [cjmp, cangjie, 仓颉]
+    discovery_status: experimental
+    version_policy: latest
+    discovery_sources:
+      - name: 仓颉包管理中心
+        url: https://pkg.cangjie-lang.cn/
+        type: package_registry
+    dedup_sources:
+      - name: cj-awesome
+        url: https://atomgit.com/cj-awesome
+        required: true
+      - name: Cangjie-TPC
+        url: https://atomgit.com/Cangjie-TPC
+        required: true
+      - name: CJMP
+        url: https://atomgit.com/CJMP
+        required: true
+    official_skills: {}
+    community:
+      name: CJMP 仓颉跨端社区
+      organization: https://atomgit.com/CJMP
+
+  electron:
+    display_name: Electron
+    aliases: [electron]
+    discovery_status: experimental
+    version_policy: latest
+    discovery_sources:
+      - name: npm
+        url: https://www.npmjs.com/
+        type: package_registry
+    dedup_sources:
+      - name: CPF-Electron
+        url: https://atomgit.com/CPF-Electron
+        required: true
+    official_skills: {}
+    community:
+      name: CPF-Electron 鸿蒙社区
+      organization: https://atomgit.com/CPF-Electron
