@@ -37,48 +37,74 @@ config = {
 path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
+evidence_file="$artifact_dir/${FLUTTER_CANDIDATE}.evidence.json"
 output_file="$artifact_dir/${FLUTTER_CANDIDATE}.md"
+status_file="$artifact_dir/runner-status.json"
 
-prompt="/skill:flutter-library-search 请对 Flutter 包 ${FLUTTER_CANDIDATE} 执行官方库搜索与鸿蒙支持状态检查。
+# Execute the network-facing parts deterministically with bounded requests.
+# This follows the official Skill's Phase 1 / cross-platform search evidence needs,
+# but does not let the model control retries or external tools.
+set +e
+timeout --signal=TERM --kill-after=10s 90s \
+  python3 tests/pi/live/collect_official_flutter_search_evidence.py \
+    "$FLUTTER_CANDIDATE" "$evidence_file"
+collector_exit=$?
+set -e
 
-要求：
-- 严格按已加载的 CPF-Flutter 官方 flutter-library-search Skill 执行；
-- 只做该 Skill 覆盖的搜索/判定，不开始实际移植；
-- 当前事实必须通过可访问来源核查，不凭记忆断言；
-- 单个外部来源失败时记录失败并继续，不要无限重试；
-- 最终先给简短的人类可读结论；
-- 回答末尾追加以下机器可读区块：
+if [[ "$collector_exit" -ne 0 || ! -s "$evidence_file" ]]; then
+  printf '{"candidate":"%s","collector_exit":%s,"pi_exit":null,"result":"inconclusive"}\n' \
+    "$FLUTTER_CANDIDATE" "$collector_exit" > "$status_file"
+  echo "Evidence collector failed; preserving inconclusive result."
+  exit 0
+fi
+
+evidence="$(cat "$evidence_file")"
+prompt="/skill:flutter-library-search 请严格依据已加载的 CPF-Flutter 官方 flutter-library-search Skill，对 Flutter 包 ${FLUTTER_CANDIDATE} 进行鸿蒙支持状态判断。
+
+本次所有网络事实已经由确定性采集器提供。禁止再次联网或调用工具，只能使用下面的 LIVE_EVIDENCE_JSON。不要凭记忆补充事实。
+
+如果证据足以对应官方 Skill 的三类业务结论，请映射为：
+- 已适配 -> adapted
+- 无需适配 -> no_adaptation_needed
+- 需要适配 -> needs_adaptation
+
+如果官方 Skill 要求的关键阶段因为来源 unavailable/partial 而无法可靠完成，使用 inconclusive，不要把“未发现”升级成确定结论。
+
+先给一句简短结论，然后在末尾输出：
 
 <!-- OFFICIAL_RESULT -->
 \`\`\`json
 {
   \"candidate\": \"${FLUTTER_CANDIDATE}\",
   \"skill\": \"flutter-library-search\",
-  \"result\": \"adapted | not_found | no_adaptation_needed | inconclusive\",
+  \"result\": \"adapted | needs_adaptation | no_adaptation_needed | inconclusive\",
   \"reason\": \"...\",
   \"evidence_urls\": [\"https://...\"],
   \"pending_checks\": [\"...\"]
 }
 \`\`\`
 
-result 字段只能使用上述四个 token；如果证据不足或来源不可用，必须使用 inconclusive。"
+LIVE_EVIDENCE_JSON:
+\`\`\`json
+${evidence}
+\`\`\`"
 
 set +e
-timeout --signal=TERM --kill-after=15s 3m \
+timeout --signal=TERM --kill-after=10s 75s \
   pi \
     --provider agnes-cn \
     --model "$PI_MODEL" \
     --no-session \
+    --no-tools \
     --skill "$vendor_dir/flutter-library-search/SKILL.md" \
     -p "$prompt" \
   | tee "$output_file"
 pi_exit=${PIPESTATUS[0]}
 set -e
 
-printf '{"candidate":"%s","pi_exit":%s}\n' "$FLUTTER_CANDIDATE" "$pi_exit" \
-  > "$artifact_dir/runner-status.json"
+printf '{"candidate":"%s","collector_exit":%s,"pi_exit":%s}\n' \
+  "$FLUTTER_CANDIDATE" "$collector_exit" "$pi_exit" > "$status_file"
 
-# This smoke run is observational: preserve official Skill output even if the
-# provider or an external source times out. Hard assertions happen in the
-# deterministic handoff contract, not here.
+# Observational smoke: artifacts preserve evidence + official Skill judgment.
+# Machine-level promotion/demotion semantics are enforced by the handoff contract.
 exit 0
