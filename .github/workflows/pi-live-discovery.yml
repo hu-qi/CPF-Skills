@@ -20,20 +20,12 @@ concurrency:
 jobs:
   live-flutter-discovery:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: ${{ matrix.model == 'agnes-2.5-pro' }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        model:
-          - agnes-2.5-flash
-          - agnes-2.5-pro
+    timeout-minutes: 10
 
     env:
       AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
       AGNES_BASE_URL: https://api.agnes-ai.cn/v1
-      PI_MODEL: ${{ matrix.model }}
+      PI_MODEL: agnes-2.5-flash
 
     steps:
       - name: Checkout
@@ -63,6 +55,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pi-live-flutter-${{ matrix.model }}-output
+          name: pi-live-flutter-agnes-2.5-flash-output
           path: .artifacts/pi-live/
           if-no-files-found: ignore
