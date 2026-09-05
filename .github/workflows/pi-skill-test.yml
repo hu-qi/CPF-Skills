@@ -2,6 +2,15 @@ name: Pi Skill Contract Tests
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".atomcode/skills/**"
+      - "resources/**"
+      - "tests/pi/**"
+      - "scripts/ci/**"
+      - ".github/workflows/pi-skill-test.yml"
   pull_request:
     paths:
       - ".atomcode/skills/**"
@@ -21,7 +30,7 @@ jobs:
   discovery-contract:
     # GitHub does not expose repository secrets to forked pull requests.
     # Skip those runs instead of producing a misleading authentication failure.
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
