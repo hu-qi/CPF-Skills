@@ -7,6 +7,11 @@ on:
         description: Flutter package name to qualify with CPF-Flutter official Skill
         required: true
         default: cached_network_image
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pi-official-flutter-candidate.yml"
 
 permissions:
   contents: read
@@ -24,7 +29,7 @@ jobs:
       AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
       AGNES_BASE_URL: https://api.agnes-ai.cn/v1
       PI_MODEL: agnes-2.5-flash
-      FLUTTER_CANDIDATE: ${{ github.event.inputs.candidate }}
+      FLUTTER_CANDIDATE: ${{ github.event.inputs.candidate || 'audioplayers' }}
 
     steps:
       - name: Checkout
