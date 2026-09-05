@@ -33,17 +33,31 @@ config = {
 path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
+evidence_file=".artifacts/pi-live/flutter-evidence.json"
 output_file=".artifacts/pi-live/flutter-discovery-${PI_MODEL}.md"
-case_prompt="$(cat tests/pi/live/flutter-discovery.prompt.md)"
-prompt="/skill:thirdparty-library-discovery ${case_prompt}"
 
-# Bound the whole agent run so a slow external source cannot pin a CI runner.
-# timeout exits with 124; the artifact upload step still preserves any partial output.
-timeout --signal=TERM --kill-after=15s 5m \
+# Network collection is deterministic and independently bounded. The model never
+# controls these requests, so a slow external site cannot create an unbounded tool loop.
+timeout --signal=TERM --kill-after=10s 90s \
+  python3 tests/pi/live/collect_flutter_evidence.py "$evidence_file"
+
+case_prompt="$(cat tests/pi/live/flutter-discovery.prompt.md)"
+evidence="$(cat "$evidence_file")"
+prompt="/skill:thirdparty-library-discovery ${case_prompt}
+
+LIVE_EVIDENCE_JSON:
+\`\`\`json
+${evidence}
+\`\`\`"
+
+# All live facts are already in the prompt. Disable tools to test only the Skill's
+# decision logic over the auditable evidence snapshot.
+timeout --signal=TERM --kill-after=10s 90s \
   pi \
     --provider agnes-cn \
     --model "$PI_MODEL" \
     --no-session \
+    --no-tools \
     --skill .atomcode/skills/thirdparty-library-discovery/SKILL.md \
     -p "$prompt" \
   | tee "$output_file"
