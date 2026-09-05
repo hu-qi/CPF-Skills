@@ -66,40 +66,83 @@ def evidence_urls(evidence: dict[str, Any]) -> list[str]:
             if isinstance(item, dict) and isinstance(item.get("url"), str):
                 urls.append(item["url"])
 
-    unique: list[str] = []
-    seen: set[str] = set()
-    for url in urls:
-        if url not in seen:
-            seen.add(url)
-            unique.append(url)
-    return unique
+    return list(dict.fromkeys(urls))
 
 
-def source_gaps(evidence: dict[str, Any]) -> list[str]:
-    gaps: list[str] = []
+def status_of(source: Any) -> str:
+    if not isinstance(source, dict):
+        return "missing"
+    value = source.get("result")
+    return str(value) if value is not None else "unknown"
 
-    def inspect(name: str, source: Any) -> None:
-        if not isinstance(source, dict):
-            gaps.append(f"{name}: missing")
-            return
-        result = source.get("result")
-        if result not in {"checked"}:
-            gaps.append(f"{name}: {result or 'unknown'}")
 
-    pub = evidence.get("pub_dev")
-    inspect("pub.dev", pub.get("source") if isinstance(pub, dict) else None)
+def positive_adaptation_evidence(evidence: dict[str, Any]) -> bool:
     origin = evidence.get("origin_repository")
-    inspect("origin_repository", origin.get("source") if isinstance(origin, dict) else None)
+    if isinstance(origin, dict):
+        repository = origin.get("repository")
+        if isinstance(repository, dict):
+            if repository.get("has_ohos_or_harmony") is True:
+                return True
+            branches = repository.get("harmony_branches")
+            if isinstance(branches, list) and branches:
+                return True
 
     searches = evidence.get("cross_platform_searches")
     if isinstance(searches, list):
         for item in searches:
-            if isinstance(item, dict):
-                inspect(str(item.get("name") or "cross_platform_search"), item)
-            else:
-                gaps.append("cross_platform_search: malformed")
-    else:
-        gaps.append("cross_platform_searches: missing")
+            if not isinstance(item, dict) or item.get("result") != "checked":
+                continue
+            matches = item.get("matches")
+            if isinstance(matches, list) and matches:
+                return True
+    return False
+
+
+def critical_gaps(evidence: dict[str, Any], result: str) -> list[str]:
+    """Return only source gaps that materially weaken this specific conclusion."""
+    gaps: list[str] = []
+
+    pub = evidence.get("pub_dev")
+    pub_source = pub.get("source") if isinstance(pub, dict) else None
+    origin = evidence.get("origin_repository")
+    origin_source = origin.get("source") if isinstance(origin, dict) else None
+
+    if status_of(pub_source) != "checked":
+        gaps.append(f"pub.dev: {status_of(pub_source)}")
+
+    if result == "no_adaptation_needed":
+        # A pure-Dart / no-native conclusion is source-structure based. Once the
+        # original package repository is fully inspected, missing mirror searches
+        # do not invalidate the technical conclusion.
+        if status_of(origin_source) != "checked":
+            gaps.append(f"origin_repository: {status_of(origin_source)}")
+        return gaps
+
+    if result == "adapted":
+        # A positive adaptation finding only needs positive evidence from one
+        # checked source; absence from other sources is irrelevant.
+        if not positive_adaptation_evidence(evidence):
+            gaps.append("adaptation_evidence: no checked positive match")
+        return gaps
+
+    if result == "needs_adaptation":
+        # This is partly an absence claim: the original source must be inspectable,
+        # and the official Skill's configured cross-platform searches must not have
+        # silently failed. Activity-specific dedup is enforced separately upstream.
+        if status_of(origin_source) != "checked":
+            gaps.append(f"origin_repository: {status_of(origin_source)}")
+        searches = evidence.get("cross_platform_searches")
+        if not isinstance(searches, list) or not searches:
+            gaps.append("cross_platform_searches: missing")
+        else:
+            for item in searches:
+                if not isinstance(item, dict):
+                    gaps.append("cross_platform_search: malformed")
+                    continue
+                if item.get("result") != "checked":
+                    gaps.append(f"{item.get('name') or 'cross_platform_search'}: {item.get('result') or 'unknown'}")
+        return gaps
+
     return gaps
 
 
@@ -123,7 +166,6 @@ def main() -> None:
     evidence = read_json(evidence_path) if evidence_path.exists() else {}
     text = output_path.read_text(encoding="utf-8", errors="replace") if output_path.exists() else ""
     raw = extract_result(text)
-    gaps = source_gaps(evidence)
 
     result = "inconclusive"
     reason = "官方 Skill 未产生可解析的机器结果。"
@@ -164,11 +206,10 @@ def main() -> None:
             reason = "官方 Skill 返回了机器区块，但字段或枚举不符合 handoff 契约。"
             pending.append("检查 flutter-library-search 输出契约")
 
+    gaps = critical_gaps(evidence, result)
     if gaps and result != "inconclusive":
-        # Conservative guardrail: the judge may explain why a partial source is not
-        # material, but this generic normalizer must never silently strengthen facts.
         result = "inconclusive"
-        reason = f"存在未完整核查的关键来源：{', '.join(gaps)}。原判断不得直接升级为确定结论。"
+        reason = f"存在会削弱该结论的未完整证据：{', '.join(gaps)}。原判断已保守降级。"
         pending.extend(gaps)
 
     normalized = {
