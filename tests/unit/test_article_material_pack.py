@@ -141,6 +141,26 @@ def test_fixture_mode_must_match_across_inputs() -> None:
         raise AssertionError("fixture mode mismatch must be rejected")
 
 
+def test_real_materials_reject_fixture_references() -> None:
+    bad_qualification = qualification()
+    bad_qualification["evidence"] = ["fixture://qualification"]
+    try:
+        builder.build_material_pack(bad_qualification, validation(), notes())
+    except ValueError as exc:
+        assert "fixture:// evidence is test-only" in str(exc)
+    else:
+        raise AssertionError("real material pack must reject fixture qualification evidence")
+
+    bad_notes = notes()
+    bad_notes["source_refs"] = ["fixture://notes/source"]
+    try:
+        builder.build_material_pack(qualification(), validation(), bad_notes)
+    except ValueError as exc:
+        assert "fixture:// evidence is test-only" in str(exc)
+    else:
+        raise AssertionError("real material pack must reject fixture development evidence")
+
+
 def main() -> None:
     test_ready_inputs_build_grounded_material_pack()
     test_incomplete_development_notes_create_gaps_not_fiction()
@@ -148,6 +168,7 @@ def main() -> None:
     test_validation_must_be_article_prep_proceed()
     test_candidate_and_framework_must_match()
     test_fixture_mode_must_match_across_inputs()
+    test_real_materials_reject_fixture_references()
     print("ARTICLE MATERIAL PACK TESTS PASSED: writing inputs stay evidence-grounded")
 
 
