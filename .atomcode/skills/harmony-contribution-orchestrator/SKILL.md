@@ -114,7 +114,26 @@ Flutter 当前 qualification 结构由仓库内确定性构建器生成，核心
 - `decision = BLOCKED`
 - `next_action = 完成 qualification.pending_checks 中的官方检查或 required 去重`
 
-如果 `pending_checks` 指向具体官方 Skill，优先调用对应官方 Skill；完成后必须重新生成 qualification，不能仅凭自然语言回答直接进入适配。
+如果 `pending_checks` 指向具体官方 Skill：
+
+1. 先确认该 Skill 已在当前 `resources/frameworks.yaml` 或当前官方仓库中存在；
+2. 已确认存在时，**必须**把该 Skill 写入输出的 `route.skill`，即使当前 `decision = BLOCKED`；
+3. `route.source = official`；
+4. 只有名称未确认、不是 Skill、或只是人工检查事项时，`route.skill` 才使用 `null`；
+5. 完成检查后必须重新生成 qualification，不能仅凭自然语言回答直接进入适配。
+
+例如 `pending_checks = ["执行 flutter-library-search 并重新生成 qualification"]`，而当前配置已确认 `flutter-library-search` 存在，则必须输出：
+
+```json
+{
+  "phase": "QUALIFICATION",
+  "decision": "BLOCKED",
+  "route": {
+    "skill": "flutter-library-search",
+    "source": "official"
+  }
+}
+```
 
 ### 5. `RECOMMENDED`
 
@@ -236,6 +255,7 @@ qualification 只解决“是否值得开始”，不证明“适配已经完成
 
 - `qualification_status` 原样保留 qualification 的规范 token；
 - `route.skill` 只有在 Skill 名称已从当前配置或当前官方仓库确认时才能填写；
+- **当 `NEEDS_OFFICIAL_CHECK` 的 `pending_checks` 明确引用已确认存在的 Skill 时，`route.skill` 必须填写该 Skill，不能因为 `decision = BLOCKED` 而置空**；
 - 不存在可确认的 Skill 时使用 `null`，并把 `route.source` 设为 `manual`；
 - `evidence` 只放实际存在的路径、URL、commit、日志、截图等引用。
 
