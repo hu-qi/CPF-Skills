@@ -4,23 +4,22 @@
 
 本仓库不重复实现 CPF-Flutter、CPF-RN、CPF-ApplicationTPC 等社区已经提供的框架级能力，而是重点解决：
 
-1. **发现值得适配的三方库**：从各生态中筛选有价值、需要鸿蒙适配、且尚未完成适配的候选库。
-2. **确定资格与路由**：把 discovery、官方 Skill 结论、活动去重收敛为稳定 qualification，并确定性决定下一步。
-3. **编排官方 Skills**：根据框架、技术栈与阶段，优先复用当前已经审计确认的官方 Skill。
-4. **管理验证与征文流程**：严格区分“可以开始适配”“适配已完成”“具备文章素材”“文章合规”。
+1. **发现值得适配的三方库**；
+2. **确定资格与下一步路由**；
+3. **优先编排当前已审计的官方 Skills**；
+4. **用确定性门禁约束适配、验证、文章准备与发布检查**。
 
 ## 设计原则
 
-- **官方 Skill 优先**：已有官方能力时，不在本仓库维护平行实现。
-- **单一职责**：Discovery、Qualification、Routing、Validation、Article 是不同阶段。
-- **配置驱动**：框架资源、官方仓、去重源和能力映射维护在 `resources/`，不散落硬编码。
-- **事实与流程分离**：实时事实来自可审计数据源/源码快照；Skill 负责流程和判断规则。
-- **活动规则高于通用输出**：官方 Skill 负责技术判断；活动资格与文章合规由本项目规则约束。
-- **不把“未发现”当作“不存在”**：来源 `partial` / `unavailable` 时必须保守降级。
-- **确定性门禁优先**：资格、框架路由、Validation 等关键状态由 Python contract 计算，模型不能绕过。
-- **真实证据优先**：不把方案、推测、模拟器结果或模型描述当成真机运行/适配完成证据。
+- **官方 Skill 优先**：已有官方能力时不维护平行实现。
+- **单一职责**：Discovery、Qualification、Routing、Validation、Article 分阶段处理。
+- **配置驱动**：框架能力事实放 `resources/frameworks.yaml`，活动规则放 `resources/article-rules.yaml`。
+- **证据优先于模型记忆**：实时事实来自可审计来源、源码快照、日志和真实运行证据。
+- **确定性门禁优先**：资格、框架路由、Validation、文章静态规则由脚本计算，模型不能覆盖。
+- **不把“未发现”当成“不存在”**：来源 `partial` / `unavailable` 时保守降级。
+- **发布前与发布后分离**：阅读量等发布后指标不阻塞发布前内容检查。
 
-## 当前流程
+## 当前主流程
 
 ```text
 第三方生态
@@ -45,7 +44,9 @@ validation gate
     ↓
 ARTICLE_PREP
     ↓
-文章写作 / 合规检查（下一阶段）
+harmony-article-check
+    ↓
+发布 / 人工补项 / 外部指标检查
 ```
 
 ## 当前可用 Skills
@@ -54,23 +55,28 @@ ARTICLE_PREP
 
 回答：**“我应该适配哪个三方库？”**
 
-项目级 Skill：
-
 ```text
 .atomcode/skills/thirdparty-library-discovery/SKILL.md
 ```
 
-当前 Flutter discovery 已跑通真实 evidence 流程，核心约束包括：
+当前 Flutter discovery 已跑通真实 evidence 流程，并明确区分：
 
-- pub.dev 候选发现；
-- direct `flutter.plugin` 信号预筛；
-- 不把“支持 Android/iOS”直接等同于“需要原生适配”；
-- 去重使用规范化等价名称，不使用任意 substring；
-- 官方 `flutter-library-search` / necessity check 只负责技术判断；
-- required 去重源未完整检查时不能升级为 `RECOMMENDED`；
-- 输出使用规范状态 token，不允许自造同义状态。
+- `flutter-library-search` 第一层官方业务结论；
+- `ohos-flutter-plugin-adaptation-necessity-check` 按需源码级复核；
+- 活动 required 去重；
+- 最终 `RECOMMENDED / NEEDS_OFFICIAL_CHECK / EXCLUDED_*` 状态。
 
-官方 Skill handoff 规范：
+关键规则：
+
+```text
+library_search = needs_adaptation
++ required dedup 全部 checked
++ required dedup 无命中
+```
+
+即可进入 `RECOMMENDED` 资格判断；`adaptation_necessity = not_run` 本身不是阻塞条件。
+
+官方 handoff 规范：
 
 ```text
 .atomcode/skills/thirdparty-library-discovery/references/official-skill-handoff.md
@@ -80,13 +86,11 @@ ARTICLE_PREP
 
 回答：**“这个候选现在允许做什么，下一步路由到哪里？”**
 
-项目级 Skill：
-
 ```text
 .atomcode/skills/harmony-contribution-orchestrator/SKILL.md
 ```
 
-当前已经具备四个确定性层：
+当前确定性链路：
 
 ```text
 candidate qualification
@@ -96,11 +100,9 @@ resolve_qualification_gate.py
 resolve_framework_route.py
     ↓
 resolve_next_action.py
-    ↓
-adaptation / blocked / stopped
 ```
 
-适配完成后再进入：
+适配完成后：
 
 ```text
 validation artifact
@@ -118,9 +120,87 @@ Validation Artifact 契约：
 .atomcode/skills/harmony-contribution-orchestrator/references/validation-artifact.md
 ```
 
+### `harmony-article-check` v0.1
+
+回答：**“这篇征文现在是否具备发布资格，还缺什么？”**
+
+```text
+.atomcode/skills/harmony-article-check/SKILL.md
+```
+
+检查结果严格区分：
+
+```text
+PASS
+FAIL
+MANUAL_REQUIRED
+EXTERNAL_REQUIRED
+POST_PUBLISH
+NOT_APPLICABLE
+```
+
+完整发布状态：
+
+```text
+BLOCKED
+MANUAL_REVIEW_REQUIRED
+READY_TO_PUBLISH
+```
+
+当前确定性文章静态检查器：
+
+```text
+scripts/article/check_article_static.py
+```
+
+已自动检查：
+
+- H1 标题是否明确包含框架/技术栈；
+- 去除 fenced/inline code 后非代码中文字符是否 `>= 800`；
+- 最终文章是否出现禁止的 `GitCode` 品牌/链接；
+- 开头和结尾是否各包含一次规范社区引导语；
+- 图片引用是否存在（仅 INFO，不能代替真机截图真实性）。
+
+以下不能由模型自动宣称通过：
+
+- 原创性；
+- 重复率；
+- AI 是否生成全部或大部分正文；
+- CSDN 实际质量分；
+- 真机截图真实性。
+
+## Shared Activity Rules
+
+活动级 SSOT：
+
+```text
+resources/article-rules.yaml
+```
+
+目前结构化维护：
+
+- 开工资格；
+- 技术验证证据；
+- 标题/正文/原创/字数规则；
+- 重复率 `<= 30%`；
+- 非代码中文正文 `>= 800`；
+- AtomGit / GitCode 品牌与链接规则；
+- 开头/结尾社区引导语；
+- AI 不得生成文章全部或大部分内容；
+- CSDN 质量分 `>= 80`；
+- 发布后阅读量 `>= 1000`，但不作为发布前阻塞项。
+
+CSDN 质量检查入口：
+
+```text
+https://www.csdn.net/qc
+```
+
+框架社区名称和组织链接不复制进 `article-rules.yaml`，统一从 `resources/frameworks.yaml` 获取。
+
 ## Qualification 门禁
 
-最终候选资格使用以下状态：
+状态：
 
 ```text
 RECOMMENDED
@@ -139,45 +219,45 @@ qualification.eligible_to_start_adaptation == true
 pending_checks == []
 ```
 
-才允许进入：
+才允许：
 
 ```text
 phase = ADAPTATION
 decision = PROCEED
 ```
 
-其余状态只能 `BLOCKED` 或 `STOP`。
+## Framework Routing
 
-## Framework Route Resolver
-
-框架路由事实维护在：
+路由事实：
 
 ```text
 resources/frameworks.yaml
 ```
 
-当前关键边界：
-
 ### Flutter
 
-已审计资格相关官方 Skills：
+已审计资格相关 Skills：
 
-- `flutter-library-search`
-- `ohos-flutter-plugin-adaptation-necessity-check`
+```text
+flutter-library-search
+ohos-flutter-plugin-adaptation-necessity-check
+```
 
-当前未确认独立的实际 porting implementation Skill，因此进入实现阶段后不能凭空创造官方路由。
+当前未确认独立实际 porting implementation Skill。
 
 ### React Native
 
-当前 CPF-RN 官方 HEAD 已由 CI 审计。已确认的三方库业务能力包括：
+当前官方 HEAD 已审计确认：
 
-- `rnoh-lib-interface-analyzer`
-- `rnoh-lib-code-check`
-- `rnoh-lib-demo-doc`
-- `rnoh-lib-demo-gen`
-- `rnoh-lib-xts-gen`
+```text
+rnoh-lib-interface-analyzer
+rnoh-lib-code-check
+rnoh-lib-demo-doc
+rnoh-lib-demo-gen
+rnoh-lib-xts-gen
+```
 
-当前未审计到独立实际移植 implementation Skill，因此：
+未发现独立实际移植 implementation Skill：
 
 ```text
 adaptation_implementation = null
@@ -185,49 +265,47 @@ adaptation_implementation = null
 
 ### ApplicationTPC / ArkTS
 
-当前官方仓审计确认：
-
-```text
-oh​​os-library-migration-analyzer
-    ↓
-oh​​os-library-porting
-```
-
-实际配置使用无零宽字符的 Skill 名：
+当前审计确认：
 
 ```text
 ohos-library-migration-analyzer
+    ↓
 ohos-library-porting
 ```
 
-ArkTS 可确定性路由到官方 `ohos-library-porting`。
+ArkTS 可确定性路由到官方 porting Skill。
 
 ### ApplicationTPC / C/C++
 
-当前审计确认 `ohos-library-migration-analyzer` 可以用于迁移分析，但现有 `ohos-library-porting` 主流程面向 ArkTS/ETS + HAR，没有足够证据把它视为完整 C/C++ NDK 实现 Skill。因此：
+当前确认分析能力：
 
 ```text
 analysis_skill = ohos-library-migration-analyzer
+```
+
+但尚无足够证据把 `ohos-library-porting` 当作完整 C/C++ NDK 实现 Skill：
+
+```text
 adaptation_implementation = null
 route_type = MANUAL_REQUIRED
 ```
 
-通用名称 `applicationtpc` 不允许静默选择 ArkTS；必须显式指定 `arkts` 或 `cpp`。
+`applicationtpc` 不能静默选 ArkTS；必须明确 `arkts` 或 `cpp`。
 
 ## Validation Gate
 
-适配已经开始，不等于适配已经验证完成。
+进入 `ARTICLE_PREP` 前必须验证：
 
-进入 `ARTICLE_PREP` 前必须同时验证：
+```text
+implementation
+build
+demo
+tests
+device_run
+screenshots
+```
 
-1. `implementation`：真实代码/实现产物；
-2. `build`：构建成功；
-3. `demo`：Demo 或最小使用场景；
-4. `tests`：关键功能测试通过；
-5. `device_run`：HarmonyOS/OpenHarmony **实体设备**运行成功；
-6. `screenshots`：真实成功运行截图。
-
-每项状态只能使用：
+状态只能使用：
 
 ```text
 VERIFIED
@@ -236,47 +314,37 @@ NOT_RUN
 MISSING
 ```
 
-所有检查均为 `VERIFIED` 且有证据时：
+`VERIFIED` 必须附真实 evidence。
 
-```text
-phase = ARTICLE_PREP
-decision = PROCEED
-```
-
-否则：
-
-```text
-phase = VALIDATION
-decision = BLOCKED
-```
-
-其中 `device_run=VERIFIED` 还强制要求：
+`device_run=VERIFIED` 还要求：
 
 ```text
 device_kind = physical
 platform = HarmonyOS | OpenHarmony
 ```
 
-模拟器/预览器不能满足征文真机门禁。
+模拟器/预览器不能满足活动真机门禁。
 
 ## CI / 测试分层
 
-### 1. Deterministic Tests
+### Deterministic Tests
 
 ```text
 .github/workflows/deterministic-tests.yml
 ```
 
-自动运行，不需要模型 API Key。当前覆盖：
+自动运行，无需模型 API Key。当前覆盖：
 
-- discovery helper regression；
+- discovery helper；
 - qualification gate；
-- framework route resolver；
-- composed orchestrator next-action；
+- framework route；
+- orchestrator next-action；
 - validation gate；
+- article-rules schema；
+- article static checker；
 - GitHub Actions Node 24 runtime guard。
 
-GitHub Actions 第一方依赖最低版本守卫：
+第一方 GitHub Actions 最低版本：
 
 ```text
 actions/checkout        >= v7
@@ -285,76 +353,47 @@ actions/setup-python    >= v7
 actions/setup-node      >= v6
 ```
 
-### 2. Pi Skill Contract Tests
+### Pi Skill Contract Tests
 
 ```text
 .github/workflows/pi-skill-test.yml
 ```
 
-自动使用 `agnes-2.5-flash`，Secret：
+自动使用：
+
+```text
+agnes-2.5-flash
+https://api.agnes-ai.cn/v1
+```
+
+Secret：
 
 ```text
 AGNES_API_KEY
 ```
 
-endpoint：
-
-```text
-https://api.agnes-ai.cn/v1
-```
-
 API Key 不进入仓库。
 
-Pi contract 负责检查模型是否遵守 Skill 状态机；关键流程门禁仍由 deterministic resolver 最终决定。
-
-### 3. Live Flutter Discovery E2E
+### Live Flutter Discovery E2E
 
 ```text
 .github/workflows/pi-live-discovery.yml
 ```
 
-手动运行。流程为：
+手动执行；实时网络采集由确定性脚本控制，Pi 使用 `--no-tools` 消费 evidence snapshot。
 
-```text
-实时确定性采集 evidence
-    ↓
-Pi --no-tools + project Skill
-    ↓
-机器断言
-```
-
-模型不控制实时网络采集。
-
-### 4. Official Flutter Candidate Smoke
+### Official Flutter Candidate Smoke
 
 ```text
 .github/workflows/pi-official-flutter-candidate.yml
 ```
 
-手动运行单候选核查：
-
-```text
-确定性采集官方规则所需 evidence
-    ↓
-Pi --no-tools + CPF-Flutter official Skill
-    ↓
-official handoff
-    ↓
-activity evidence
-    ↓
-qualification
-    ↓
-gate / route
-```
-
-真实样本已经验证：
+真实样本已验证：
 
 - `cached_network_image` → `EXCLUDED_NO_ADAPTATION_NEEDED`
-- `audioplayers` → 活动去重明确命中 → `EXCLUDED_ALREADY_ADAPTED`
+- `audioplayers` → required 活动去重明确命中 → `EXCLUDED_ALREADY_ADAPTED`
 
-### 5. Official Skills Audits
-
-当前有：
+### Official Skills Audits
 
 ```text
 .github/workflows/cpf-flutter-official-skills-smoke.yml
@@ -362,72 +401,60 @@ gate / route
 .github/workflows/cpf-applicationtpc-official-skills-audit.yml
 ```
 
-它们浅克隆官方当前 HEAD、枚举实际 `SKILL.md`、保存 commit 和 artifact，以避免凭记忆维护 Skill 名称。
+浅克隆当前官方 HEAD、枚举实际 `SKILL.md`、保存 commit 和 artifact，避免凭记忆维护 Skill 名称。
 
-## 关键实现文件
+## 关键实现
 
 ```text
+.atomcode/skills/
+├── thirdparty-library-discovery/
+├── harmony-contribution-orchestrator/
+└── harmony-article-check/
+
+resources/
+├── frameworks.yaml
+└── article-rules.yaml
+
 scripts/
-├── qualification/
-│   └── ...
-└── orchestrator/
-    ├── resolve_qualification_gate.py
-    ├── resolve_framework_route.py
-    ├── resolve_next_action.py
-    └── resolve_validation_gate.py
+├── orchestrator/
+│   ├── resolve_qualification_gate.py
+│   ├── resolve_framework_route.py
+│   ├── resolve_next_action.py
+│   └── resolve_validation_gate.py
+└── article/
+    └── check_article_static.py
 
 tests/unit/
 ├── test_discovery_helpers.py
 ├── test_orchestrator_gate.py
 ├── test_framework_route.py
 ├── test_orchestrator_next_action.py
-└── test_validation_gate.py
+├── test_validation_gate.py
+├── test_article_rules.py
+└── test_article_static_check.py
 ```
-
-## 规划中的 Skills
-
-### `harmony-article-writing`
-
-基于真实 qualification、代码 diff、提交、构建/测试日志、问题记录和真机截图组织技术文章，不虚构适配过程。
-
-### `harmony-article-check`
-
-对标题、字数、真机截图、社区引导、品牌/链接、CSDN 质量要求等活动规则做结构化检查，并把发布前内容合规与发布后阅读指标分开。
 
 ## Roadmap
 
 - [x] 仓库定位与职责边界
-- [x] `thirdparty-library-discovery` v0.1
+- [x] `thirdparty-library-discovery`
 - [x] Flutter live evidence + official Skill handoff
 - [x] candidate qualification artifact
 - [x] qualification deterministic gate
 - [x] `harmony-contribution-orchestrator` MVP
 - [x] CPF-Flutter / CPF-RN / CPF-ApplicationTPC 官方能力审计
 - [x] ArkTS / C/C++ 显式 framework routing
-- [x] composed `qualification → gate → route → next_action`
+- [x] `qualification → gate → route → next_action`
 - [x] Validation Artifact + deterministic Validation Gate
+- [x] `resources/article-rules.yaml`
+- [x] `harmony-article-check` v0.1 + deterministic static checker
 - [x] Node 24 GitHub Actions 迁移与静态版本守卫
-- [ ] 建立 `article-rules.yaml`，结构化活动规则
+- [ ] 为 `harmony-article-check` 增加 Pi contract
+- [ ] 实现完整 article compliance report aggregator（static + validation + external/manual evidence）
 - [ ] 实现 `harmony-article-writing`
-- [ ] 实现 `harmony-article-check`
-- [ ] 增加真实适配完成后的 validation artifact 样例
+- [ ] 增加真实适配完成后的 validation/article-check 样例
 - [ ] 如有分发需求，再增加 AtomCode Plugin/Marketplace 元数据
 
 ## 下一步
 
-当前技术侧主链已经具备确定性资格、框架路由和 Validation Gate。下一步进入文章侧之前，优先建立：
-
-```text
-resources/article-rules.yaml
-```
-
-把征文规则拆成：
-
-- 发布前硬性门禁；
-- 文章内容/结构规则；
-- 品牌与链接规则；
-- AI 使用约束；
-- CSDN 发布前质量检查；
-- 发布后阅读量指标。
-
-完成后，`harmony-article-writing` 与 `harmony-article-check` 才有稳定的共享事实源，而不是各自在 Skill 文案里复制活动规则。
+优先完成 `harmony-article-check` 的模型契约与完整 compliance report 聚合层；稳定后再实现 `harmony-article-writing`。这样写作 Skill 生成或修改文章后，可以立即交给确定性/结构化检查，而不是“先写再猜是否合规”。
