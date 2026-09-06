@@ -60,3 +60,6 @@ jobs:
 
       - name: Run deterministic framework route regressions
         run: python3 tests/unit/test_framework_route.py
+
+      - name: Run deterministic orchestrator next-action regressions
+        run: python3 tests/unit/test_orchestrator_next_action.py
