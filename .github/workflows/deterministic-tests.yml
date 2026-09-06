@@ -13,6 +13,7 @@ on:
       - "scripts/qualification/**"
       - "scripts/orchestrator/**"
       - "scripts/article/**"
+      - "scripts/evidence/**"
       - "scripts/ci/check-github-actions-runtime.py"
       - "resources/frameworks.yaml"
       - "resources/article-rules.yaml"
@@ -28,6 +29,7 @@ on:
       - "scripts/qualification/**"
       - "scripts/orchestrator/**"
       - "scripts/article/**"
+      - "scripts/evidence/**"
       - "scripts/ci/check-github-actions-runtime.py"
       - "resources/frameworks.yaml"
       - "resources/article-rules.yaml"
@@ -87,3 +89,6 @@ jobs:
 
       - name: Run fixture-only article pipeline E2E regression
         run: python3 tests/unit/test_e2e_article_fixture.py
+
+      - name: Run real-case evidence intake regressions
+        run: python3 tests/unit/test_real_case_intake.py
