@@ -7,232 +7,382 @@ description: 为鸿蒙三方库适配征文发现、筛选和排序候选三方�
 
 ## 目标
 
-回答一个问题：**“我应该适配哪个三方库？”**
+回答：**“我应该适配哪个三方库？”**
 
-本 Skill 负责从指定技术生态中发现候选库、做活动资格初筛、调用或衔接官方 Skill 进行去重与适配必要性判断，并按证据排序。
+本 Skill 负责：
 
-本 Skill **不负责实际移植三方库**，也不重复实现 CPF-Flutter、CPF-RN、CPF-ApplicationTPC 等社区已有的源码级适配分析能力。
+- 从指定技术生态发现候选库；
+- 做价值/维护性初筛；
+- 消费官方 Skill 技术结论；
+- 执行活动 required 去重门禁；
+- 对通过硬门槛的候选评分和排序。
 
-## 何时使用
-
-当用户表达以下意图时使用：
-
-- 不知道应该适配哪个三方库；
-- 想找尚未支持 OpenHarmony / HarmonyOS 的热门或有价值三方库；
-- 想要若干符合征文条件的候选选题；
-- 想按领域、难度或数量筛选候选库；
-- 已有一个宽泛方向，例如“Flutter 音视频”“RN 文件处理”，但没有具体库名。
-
-如果用户已经明确给出一个具体库，并只想判断它是否需要适配，优先使用对应社区的“库搜索 / 适配必要性检查”官方 Skill，而不是重新执行完整候选发现。
+本 Skill **不负责实际移植**，也不重复实现 CPF-Flutter、CPF-RN、CPF-ApplicationTPC 等社区已有的源码级能力。
 
 ## 输入
 
-尽量从用户请求中解析，缺失时采用合理默认值，不为非关键参数反复追问。
+- `framework`：如 `flutter`、`react-native`、`arkts`、`cpp`、`kmp-cmp`、`cordova`、`ionic`、`cjmp`、`electron`。
+- `topic`：可选能力方向，如图片、视频、数据库、蓝牙、文件、网络、安全。
+- `count`：默认 `10`。
+- `difficulty`：`easy | medium | hard | any`，默认 `any`。
+- `freshness`：默认优先仍维护、近期仍有发布或提交活动的库。
 
-- `framework`：目标框架，例如 `flutter`、`react-native`、`arkts`、`cpp`、`kmp-cmp`、`cordova`、`ionic`、`cjmp`、`electron`。
-- `topic`：可选的能力方向或关键词，例如图片、视频、数据库、蓝牙、文件、网络、安全。
-- `count`：期望最终候选数量，默认 `10`。
-- `difficulty`：可选，`easy | medium | hard | any`，默认 `any`。
-- `freshness`：默认优先当前仍维护、近期仍有发布或提交活动的库。
+框架入口、去重源和官方 Skill 路由读取：
 
-框架路由和去重来源读取仓库根目录 `resources/frameworks.yaml`。其中的版本策略、仓库和 Skill 地址属于可变事实，不应复制到本 Skill 主逻辑中。
+```text
+resources/frameworks.yaml
+```
 
-## 输出状态
+## 规范状态 token
 
-每个候选必须归入以下状态之一：
+每个候选只能使用以下状态之一：
 
-- `RECOMMENDED`：已有足够证据表明有生态价值、存在鸿蒙适配必要性、未发现已有适配，并通过活动去重检查。
-- `NEEDS_OFFICIAL_CHECK`：候选值得继续，但当前缺少官方 Skill 的必要性结论或去重证据，不得表述为“确定可写”。
-- `EXCLUDED_ALREADY_ADAPTED`：已发现 OpenHarmony / HarmonyOS 适配或活动指定社区已有实现。
-- `EXCLUDED_NO_ADAPTATION_NEEDED`：纯语言层实现或不存在需要鸿蒙平台补齐的能力。
-- `EXCLUDED_LOW_VALUE`：长期失维、用途过窄、生态采用度过低，或缺乏足够证据支持作为征文选题。
-- `EXCLUDED_UNVERIFIABLE`：无法确认原库、维护状态或关键事实。
+```text
+RECOMMENDED
+NEEDS_OFFICIAL_CHECK
+EXCLUDED_ALREADY_ADAPTED
+EXCLUDED_NO_ADAPTATION_NEEDED
+EXCLUDED_LOW_VALUE
+EXCLUDED_UNVERIFIABLE
+```
 
-### 状态 token 契约
+`status` 是机器接口，必须逐字输出，禁止翻译、缩写、别名或自造状态。
 
-`status` 是机器可校验字段，不是展示文案。输出 `status` 时必须直接使用上面 6 个英文 token 之一，逐字一致。
+例如禁止：
 
-**禁止：**
+```text
+ADAPTED
+UNVERIFIED
+ADAPTATION_NOT_NEEDED
+已适配
+无需适配
+```
 
-- 翻译状态，例如“已适配”“无需适配”；
-- 缩写状态；
-- 创建别名或同义词，例如 `ADAPTED`、`UNVERIFIED`、`ADAPTATION_NOT_NEEDED`；
-- 用 emoji、自然语言或其他标签替代规范 token。
+解释放在 `reason`，不能改写 `status` token。
 
-如果需要面向用户解释状态，放在 `reason`、推荐理由或正文中；`status` 字段仍保持规范 token。
+## Critical Constraints
 
-**不确定时必须降级为 `NEEDS_OFFICIAL_CHECK` 或 `EXCLUDED_UNVERIFIABLE`，禁止把推测写成已验证事实。**
+1. 官方 Skill 负责技术结论，本项目 Skill 负责活动资格与排序。
+2. 技术上“需要适配”不等于活动上“可重复适配”。
+3. required 去重源未全部 `checked` 时，禁止 `RECOMMENDED`。
+4. “未搜索到”不等于“不存在”。
+5. 官方结论 `inconclusive` / `not_run` 不得擅自升级为确定事实。
+6. **Flutter 的 `ohos-flutter-plugin-adaptation-necessity-check` 是按需源码级复核，不是每个候选推荐前的强制第二关。**
+7. **当 `flutter-library-search=needs_adaptation` 已是明确官方业务结论，且 required 去重全部完成无命中时，`adaptation_necessity=not_run` 本身绝不能阻塞候选进入 `RECOMMENDED` 资格判断。**
+8. 评分只用于排序，不能绕过硬门禁。
 
-## 工作流
+## Workflow
 
-### 1. 解析框架与活动上下文
+### 1. 解析框架
 
-1. 识别 `framework`。
-2. 读取 `resources/frameworks.yaml` 中对应条目。
-3. 确认：
-   - 候选发现入口（registry / directory）；
-   - 活动去重来源；
-   - 官方 Skills 仓库；
-   - 是否存在官方“库搜索 / 适配必要性检查” Skill。
-4. 如果配置标记为 `experimental`，输出中明确说明该框架的发现流程仍处于实验阶段。
+读取 `resources/frameworks.yaml`，确认：
 
-### 2. 发现候选库
+- discovery source；
+- required dedup sources；
+- 官方 Skills 仓库；
+- 当前是否已审计相关官方能力。
 
-围绕 `topic`（若有）从该生态的中心仓、目录站点或公开仓库发现候选。
+对于存在多个技术栈的 framework family，必须明确 variant；不要静默选择。
 
-候选池数量应明显大于最终输出数量；目标至少为 `max(count * 3, 20)` 个可识别库。如果外部数据不足，可少于该数量，但必须说明数据限制。
+### 2. 发现候选
 
-发现阶段优先寻找：
+候选池目标至少：
+
+```text
+max(count * 3, 20)
+```
+
+优先：
 
 - 常见业务能力；
-- 有实际用户或社区采用证据；
+- 有采用/热度证据；
 - 当前仍维护；
-- 在 Android / iOS / Desktop 等平台存在平台实现；
-- 容易构造可验证 Demo；
-- 有明确鸿蒙平台缺口的库。
+- 容易构造 Demo；
+- 有平台能力差异或原生实现迹象。
 
-发现阶段不要仅凭名称判断“需要适配”。
+Flutter discovery 阶段优先识别直接 `flutter.plugin` 信号，不把“支持 Android/iOS”的标签直接等同于“存在原生插件实现”。
 
-### 3. 初筛低价值候选
+### 3. 初筛
 
-对每个候选至少检查：
+至少检查：
 
-- 原始包页面或仓库是否可确认；
-- 最近是否仍有发布、提交或 issue 活动；
-- 是否有基本的使用/采用证据；
-- 是否明显废弃、归档或已被主流替代；
-- 是否属于纯配置、示例、模板等不适合适配征文的项目。
+- 原始包/仓库身份可验证；
+- 维护状态；
+- 采用/使用证据；
+- 是否归档/失维/已被主流替代；
+- 是否属于纯配置、模板、环境搭建类主题。
 
-缺乏数据时保留“证据不足”标记，不虚构下载量、star、发布日期等指标。
+证据不足时不要编造下载量、Star、发布日期等事实。
 
-### 4. 判断是否存在平台适配必要性
+### 4. 消费官方技术结论
 
-这一步优先委托对应社区官方 Skill。
+Flutter 优先使用：
 
-#### Flutter
+```text
+flutter-library-search
+oh​​os-flutter-plugin-adaptation-necessity-check
+```
 
-如果环境中已安装 CPF-Flutter 官方 Skills：
+实际 Skill 名无隐藏字符：
 
-1. 优先调用 `flutter-library-search` 对候选做鸿蒙支持检索与初步分类；
-2. 对结果仍不明确、或需要源码级确认的候选，调用 `ohos-flutter-plugin-adaptation-necessity-check`；
-3. 直接采用官方 Skill 的技术结论，并保留证据来源。
+```text
+flutter-library-search
+ohos-flutter-plugin-adaptation-necessity-check
+```
 
-如果官方 Skills 当前不可调用：
+其中：
 
-- 可以根据公开信息做初筛；
-- 不要自行假装完成与官方 Skill 等价的源码级检查；
-- 对关键候选标记 `NEEDS_OFFICIAL_CHECK`，并指出后续需要执行的官方 Skill。
+- `flutter-library-search` 是第一层官方业务结论；
+- necessity check 只在搜索结论不明确、需要源码级复核、或正式开工前需要更深入技术报告时执行。
 
-#### 其他框架
+官方 handoff 的完整说明位于：
 
-读取 `resources/frameworks.yaml` 的 `official_skills` 配置。存在官方检查 Skill 时优先调用；不存在时仅执行当前有证据支持的检查，并明确能力边界。
+```text
+references/official-skill-handoff.md
+```
 
-### 5. 活动去重
+但以下决策优先级是本 Skill 的**强制规则**，即使 reference 未被运行环境自动加载也必须遵守。
 
-技术上“需要适配”不等于“符合本次征文资格”。
+## Flutter Official Handoff Decision Matrix
 
-必须按照当前框架配置中的 `dedup_sources` 逐项检查，包括：
+输入中的 `library_search.result` 使用：
 
-- 对应中心仓/目录；
-- CPF 官方组织；
-- 活动指定的补充社区/仓库；
-- 原项目自身是否已经包含 OpenHarmony / HarmonyOS 支持。
+```text
+adapted
+needs_adaptation
+no_adaptation_needed
+inconclusive
+not_run
+```
 
-只有完成必要去重后，才能标记 `RECOMMENDED`。
+`adaptation_necessity.result` 使用：
 
-如果任何一个强制去重来源无法访问或无法确认：
+```text
+needed
+not_needed
+inconclusive
+not_run
+```
 
-- 不得直接标记 `RECOMMENDED`；
-- 改为 `NEEDS_OFFICIAL_CHECK`；
-- 在“待确认项”列出缺失来源。
+`dedup_checks[].result` 使用：
 
-### 6. 难度与征文价值评估
+```text
+checked
+partial
+unavailable
+```
 
-只对通过硬性筛选的候选评分。评分用于排序，不替代资格判断。
+按以下顺序判断，先命中的规则优先：
 
-四个维度各 `0-5` 分：
+### Rule 1 — 已适配
 
-1. `ecosystem_value`：生态价值。综合采用度、维护活跃度、用途普遍性等可验证证据。
-2. `adaptation_necessity`：鸿蒙适配必要性。平台代码、系统能力、原生依赖越明确，分数越高。
-3. `feasibility`：适配可行性。越容易在合理范围内完成并验证，分数越高；复杂闭源 SDK、重度平台绑定会降低此分。
-4. `article_value`：征文价值。是否有清晰的平台差异、实现过程、可演示场景和可复现验证。
+```text
+library_search.result == adapted
+```
+
+→ `EXCLUDED_ALREADY_ADAPTED`
+
+### Rule 2 — 官方搜索明确无需适配
+
+```text
+library_search.result == no_adaptation_needed
+```
+
+→ `EXCLUDED_NO_ADAPTATION_NEEDED`
+
+### Rule 3 — 源码级检查明确无需适配
+
+```text
+adaptation_necessity.result == not_needed
+```
+
+→ `EXCLUDED_NO_ADAPTATION_NEEDED`
+
+### Rule 4 — required 去重未完成
+
+任一：
+
+```text
+required == true
+and result != checked
+```
+
+→ 不得 `RECOMMENDED`；候选仍有价值时为 `NEEDS_OFFICIAL_CHECK`
+
+### Rule 5 — required 去重命中已有实现
+
+任一 required 来源存在明确同库/等价实现 `matches`：
+
+→ `EXCLUDED_ALREADY_ADAPTED`
+
+### Rule 6 — 官方搜索已明确需要适配
+
+同时满足：
+
+```text
+library_search.result == needs_adaptation
+all required dedup result == checked
+all required dedup matches == []
+```
+
+→ 候选**可以进入 `RECOMMENDED` 资格判断**。
+
+此时：
+
+```text
+adaptation_necessity.result == not_run
+```
+
+**不阻塞、不降级，不得因此改成 `NEEDS_OFFICIAL_CHECK`。**
+
+只有存在其他真实硬门槛（例如低价值、不可验证）才可排除或降级。
+
+### Rule 7 — 源码级必要性检查明确需要适配
+
+同时满足：
+
+```text
+adaptation_necessity.result == needed
+all required dedup result == checked
+all required dedup matches == []
+library_search.result not in [adapted, no_adaptation_needed]
+```
+
+→ 候选可以进入 `RECOMMENDED` 资格判断。
+
+### Rule 8 — 仍无明确技术结论
+
+例如：
+
+```text
+library_search.result in [inconclusive, not_run]
+adaptation_necessity.result in [inconclusive, not_run]
+```
+
+且没有更高优先级排除事实：
+
+→ `NEEDS_OFFICIAL_CHECK`
+
+### Rule 9 — 身份不可验证
+
+原始包、仓库或关键候选身份本身无法验证：
+
+→ `EXCLUDED_UNVERIFIABLE`
+
+## 冲突处理
+
+如果两个官方结论冲突：
+
+- 不选更乐观结论；
+- 活动已有适配事实优先排除；
+- 其他冲突降级 `NEEDS_OFFICIAL_CHECK`；
+- `reason` 保留冲突的原始结论。
+
+例如：
+
+```text
+library_search = adapted
+adaptation_necessity = needed
+```
+
+活动状态仍优先：`EXCLUDED_ALREADY_ADAPTED`。
+
+## 其他框架
+
+读取 `resources/frameworks.yaml` 的 `official_skills`。
+
+- 已存在官方技术检查 Skill：优先调用/消费其结论；
+- 没有确认能力：只执行当前可验证检查并说明边界；
+- 不凭记忆创造 Skill 名称。
+
+## 活动去重
+
+必须逐项处理当前框架的 `dedup_sources`。
+
+required source 的结果只有真正完整核查后才能标记为 `checked`。
+
+名称匹配必须采用规范化后的包身份等价匹配，不做任意 substring 匹配，避免：
+
+```text
+file -> file_picker
+image -> cached_network_image
+```
+
+这类误排除。
+
+## 价值、难度与排序
+
+只对通过硬性筛选的候选评分。
+
+四个维度各 `0-5`：
+
+- `ecosystem_value`
+- `adaptation_necessity`
+- `feasibility`
+- `article_value`
 
 综合分：
 
-`score = ecosystem_value * 7 + adaptation_necessity * 6 + feasibility * 4 + article_value * 3`
+```text
+score = ecosystem_value * 7
+      + adaptation_necessity * 6
+      + feasibility * 4
+      + article_value * 3
+```
 
 满分 100。
 
-同时给出难度：
+难度：
 
-- `easy`：平台接口少、依赖简单、验证路径短；
-- `medium`：存在若干原生 API 或生命周期/权限/异步差异，但范围可控；
-- `hard`：大量原生接口、复杂 C/C++、闭源 SDK、音视频栈、系统服务或跨线程/跨进程机制。
+```text
+easy
+medium
+hard
+```
 
-难度是定性结论，必须附 1-2 条依据。
+必须附简短依据。
 
-### 7. 排序与输出
+默认排序：
 
-默认按以下优先级排序：
+1. `RECOMMENDED`；
+2. 综合分；
+3. 用户指定 difficulty 匹配度；
+4. 证据完整度；
+5. 真机验证和文章实践路径清晰度。
 
-1. `RECOMMENDED` 优先；
-2. 综合分高；
-3. 与用户指定 `difficulty` 更匹配；
-4. 证据完整度高；
-5. 若分数接近，优先选择更容易真机验证、文章实践路径更清晰的库。
+## 输出
 
-## 输出格式
-
-先给结论，再给证据，不输出冗长搜索日志。
-
-所有出现 `status` 的表格或结构化字段，都必须遵守上面的“状态 token 契约”。
-
-至少包含：
-
-### 推荐候选
+主表至少包含：
 
 | 排名 | 库 | 方向 | 状态 | 难度 | 评分 | 推荐理由 | 关键证据 |
 |---:|---|---|---|---|---:|---|---|
 
-只把 `RECOMMENDED` 和必要时少量高价值 `NEEDS_OFFICIAL_CHECK` 放入主表。
+另列：
 
-### 排除项
+- 有代表性的排除项；
+- `NEEDS_OFFICIAL_CHECK` 的待确认项；
+- 最值得立即推进的 `1-3` 个候选。
 
-列出有代表性的排除候选以及明确原因，例如：
+待确认项必须说明：
 
-- 已适配；
-- 无需适配；
-- 活动仓已存在；
-- 长期失维；
-- 无法验证。
-
-若排除项使用表格并包含 `status` 列，该列仍必须使用规范英文 token。
-
-### 待确认项
-
-若存在任何 `NEEDS_OFFICIAL_CHECK`，明确列出：
-
-- 需要调用的官方 Skill；
-- 尚未完成的去重来源；
-- 哪个事实确认后才能升级为 `RECOMMENDED`。
-
-### 首选建议
-
-最后只选 `1-3` 个最值得立即推进的候选，并说明下一步应该调用哪个官方 Skill 或执行什么验证。
+- 需要执行哪个已确认官方 Skill；
+- 哪个 required 去重源尚未完成；
+- 什么事实补齐后才能升级。
 
 ## 证据规则
 
-- 涉及“最新版本、维护状态、是否已适配、下载/使用热度”等时效性事实，必须以当前检索结果为依据。
-- 尽量提供原始包页、原仓库、官方社区仓库等一手来源。
-- 不根据记忆断言“没有鸿蒙版”。“未搜索到”只能表述为“在已检查来源中未发现”。
-- 官方 Skill 的结论优先于本 Skill 的启发式判断。
-- 活动去重规则优先于通用技术判断。
+- 最新版本、维护状态、热度、是否已适配等时效性事实以当前 evidence 为准。
+- 优先原始包页、原仓、官方社区仓等一手来源。
+- “未搜索到”只能写“在已检查来源中未发现”。
+- 官方 Skill 技术结论优先于启发式判断。
+- 活动去重事实优先于通用技术判断。
 
 ## 红线
 
-- 不把“热门”直接等同于“值得适配”。
-- 不把“有 Android/iOS 目录”直接等同于“必须适配鸿蒙”。
+- 不把热门直接等同于值得适配。
+- 不把 Android/iOS 目录直接等同于必须适配鸿蒙。
+- 不把 `adaptation_necessity=not_run` 作为 `library_search=needs_adaptation` 的默认阻塞项。
 - 不因搜索不到结果就断言不存在适配。
-- 不绕过活动指定去重来源。
-- 不重复实现已有官方 Skill 的完整源码分析流程。
-- 不开始实际移植；选定候选后应转交对应社区官方适配 Skills 或后续 orchestrator。
+- 不绕过 required 去重来源。
+- 不重复实现官方 Skill 的完整源码分析。
+- 不开始实际移植；选定候选后转交官方适配能力或 `harmony-contribution-orchestrator`。
