@@ -46,6 +46,37 @@ scripts/article/build_compliance_report.py
 
 这条规则是机器契约的一部分，不是建议。
 
+## Fixture 与真实发布资格隔离
+
+测试夹具使用：
+
+```text
+fixture_only = true
+fixture://...
+```
+
+它只能用于回归测试，不是现实活动证据。
+
+确定性 compliance report 会同时输出：
+
+```text
+fixture_only = true | false
+publishable = true | false
+```
+
+规则：
+
+- 真实输入 `fixture_only=false` 且全部发布前规则通过时，才允许 `publishable=true`；
+- fixture 即使覆盖到 `status=READY_TO_PUBLISH` 分支，也必须 `publishable=false`；
+- 真实 Validation 或人工确认中出现 `fixture://` 引用属于无效输入，应拒绝而不是继续判定；
+- 不得通过删除 fixture 标签，把测试数据描述成真实可发布文章。
+
+因此 **`status=READY_TO_PUBLISH` 不能单独等价为“现实文章可以发布”**；需要同时确认：
+
+```text
+publishable = true
+```
+
 ## 前置条件
 
 完整检查需要：
@@ -124,6 +155,13 @@ readership < 1000
 ```
 
 仍然必须是 `READY_TO_PUBLISH`，因为 readership 是 `POST_PUBLISH`。
+
+对于真实文章，最终可发布结论还必须满足：
+
+```text
+fixture_only = false
+publishable = true
+```
 
 ## Workflow
 
@@ -242,7 +280,7 @@ POST_PUBLISH
 scripts/article/build_compliance_report.py
 ```
 
-确定性 report 的顶层 `status` 是最终机器判定依据。模型负责解释结果、给修复建议，不得覆盖其状态。
+确定性 report 的顶层 `status`、`fixture_only`、`publishable` 是最终机器判定依据。模型负责解释结果、给修复建议，不得覆盖这些字段。
 
 ## 输出契约
 
@@ -251,6 +289,8 @@ scripts/article/build_compliance_report.py
 ```json
 {
   "schema_version": 1,
+  "fixture_only": false,
+  "publishable": false,
   "framework": "flutter",
   "status": "BLOCKED | MANUAL_REVIEW_REQUIRED | READY_TO_PUBLISH",
   "blocking_rules": [],
@@ -269,7 +309,9 @@ scripts/article/build_compliance_report.py
 - `EXTERNAL_REQUIRED` 说明需要哪个真实外部结果；
 - `MANUAL_REQUIRED` 说明需要哪个配置中的人工确认；
 - `POST_PUBLISH` 不进入 `blocking_rules`；
-- 不创建配置外的新 mandatory rule。
+- 不创建配置外的新 mandatory rule；
+- fixture report 不得解释为现实发布资格；
+- 对真实文章说“可以发布”时必须有 `publishable=true`。
 
 ## 与 Writing Skill 的边界
 
@@ -292,3 +334,4 @@ harmony-article-writing
 - 不因 readership 未到 1000 阻塞发布前状态。
 - 不允许最终文章出现 `GitCode` 品牌或链接。
 - **不发明 `article-rules.yaml` 之外的额外发布门禁。**
+- **不把 fixture 的 `READY_TO_PUBLISH` 描述成现实 `publishable=true`。**
