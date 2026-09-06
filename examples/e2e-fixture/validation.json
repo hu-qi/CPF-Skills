@@ -1,0 +1,38 @@
+{
+  "fixture_only": true,
+  "framework": "arkts",
+  "candidate": "ExampleLibrary",
+  "validation": {
+    "checks": {
+      "implementation": {
+        "status": "VERIFIED",
+        "evidence": ["fixture://validation/implementation"]
+      },
+      "build": {
+        "status": "VERIFIED",
+        "evidence": ["fixture://validation/build-log"]
+      },
+      "demo": {
+        "status": "VERIFIED",
+        "evidence": ["fixture://validation/demo"]
+      },
+      "tests": {
+        "status": "VERIFIED",
+        "evidence": ["fixture://validation/tests"]
+      },
+      "device_run": {
+        "status": "VERIFIED",
+        "evidence": ["fixture://validation/device-run"],
+        "details": {
+          "device_kind": "physical",
+          "platform": "HarmonyOS",
+          "device_model": "FixtureDevice"
+        }
+      },
+      "screenshots": {
+        "status": "VERIFIED",
+        "evidence": ["fixture://validation/device-screenshot.png"]
+      }
+    }
+  }
+}
