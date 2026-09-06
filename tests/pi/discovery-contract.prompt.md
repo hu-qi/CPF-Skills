@@ -10,6 +10,13 @@
 - 必须输出且只输出一个 JSON 对象，不要 Markdown，不要代码围栏，不要额外说明；
 - `results` 必须严格包含下面 3 个候选，顺序不限，不得遗漏或增加候选。
 
+关键机器语义（不得重新解释）：
+
+- `library_search.result = adapted` 表示“已经存在鸿蒙适配”，必须映射到 `EXCLUDED_ALREADY_ADAPTED`；
+- `library_search.result = adapted` **绝不**等于 `no_adaptation_needed`；
+- `adaptation_necessity.result = not_needed` 表示技术上无需平台适配，映射到 `EXCLUDED_NO_ADAPTATION_NEEDED`；
+- required 去重尚未全部完成时，不得升级为 `RECOMMENDED`。
+
 JSON 结构固定为：
 
 {
@@ -27,14 +34,16 @@ JSON 结构固定为：
 1. `AlphaPlugin`
    - Flutter 插件，当前仍维护；
    - 明确包含平台原生实现，因此技术上可能需要鸿蒙适配；
-   - 常规包中心检索暂未发现 OpenHarmony/HarmonyOS 支持；
-   - CPF-Flutter 官方 `flutter-library-search` 和 `ohos-flutter-plugin-adaptation-necessity-check` 本次均不可用；
-   - 活动要求的 CPF-Flutter / hxa-flutter 等必查去重源尚未全部完成验证。
+   - `library_search.result = not_run`；
+   - `adaptation_necessity.result = not_run`；
+   - 活动 required 去重源尚未全部完成验证。
 
 2. `BetaPlugin`
    - Flutter 插件；
-   - CPF-Flutter 官方 `flutter-library-search` 已明确返回：该库已有可用鸿蒙适配实现。
+   - `library_search.result = adapted`；
+   - 这是官方明确的“已有鸿蒙适配实现”结论。
 
 3. `GammaPackage`
    - Flutter 包；
-   - 官方适配必要性检查已明确确认：该包为纯 Dart 实现，不依赖平台原生能力，不需要进行鸿蒙平台适配。
+   - `adaptation_necessity.result = not_needed`；
+   - 官方源码级检查确认该包为纯 Dart 实现，不依赖平台原生能力。
