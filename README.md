@@ -5,9 +5,10 @@
 本仓库不重复实现 CPF-Flutter、CPF-RN、CPF-ApplicationTPC 等社区已经提供的框架级能力，而是重点解决：
 
 1. **发现值得适配的三方库**；
-2. **确定资格与下一步路由**；
+2. **确定活动资格与下一步路由**；
 3. **优先编排当前已审计的官方 Skills**；
-4. **用确定性门禁约束适配、验证、文章准备与发布检查**。
+4. **用确定性门禁约束适配、验证、文章准备与发布检查**；
+5. **把真实技术证据与测试夹具严格隔离**。
 
 ## 设计原则
 
@@ -15,9 +16,10 @@
 - **单一职责**：Discovery、Qualification、Routing、Validation、Article 分阶段处理。
 - **配置驱动**：框架能力事实放 `resources/frameworks.yaml`，活动规则放 `resources/article-rules.yaml`。
 - **证据优先于模型记忆**：实时事实来自可审计来源、源码快照、日志和真实运行证据。
-- **确定性门禁优先**：资格、框架路由、Validation、文章静态规则由脚本计算，模型不能覆盖。
+- **确定性门禁优先**：资格、框架路由、Validation、文章静态规则和完整 compliance 由脚本计算，模型不能覆盖。
 - **不把“未发现”当成“不存在”**：来源 `partial` / `unavailable` 时保守降级。
 - **发布前与发布后分离**：阅读量等发布后指标不阻塞发布前内容检查。
+- **Fixture 不得污染真实流程**：`fixture://` 证据只允许在显式 `fixture_only=true` 的回归夹具中使用，fixture compliance 永远 `publishable=false`。
 
 ## 当前主流程
 
@@ -43,6 +45,14 @@ validation artifact
 validation gate
     ↓
 ARTICLE_PREP
+    ↓
+article material pack
+    ↓
+harmony-article-writing
+    ↓
+article static check
+    ↓
+full compliance report
     ↓
 harmony-article-check
     ↓
@@ -120,6 +130,29 @@ Validation Artifact 契约：
 .atomcode/skills/harmony-contribution-orchestrator/references/validation-artifact.md
 ```
 
+### `harmony-article-writing` v0.1
+
+回答：**“如何基于真实适配证据整理文章素材、提纲和局部文本？”**
+
+```text
+.atomcode/skills/harmony-article-writing/SKILL.md
+```
+
+本 Skill 不提供“一键生成整篇参赛文章”。当前边界：
+
+- 可以整理 qualification / validation / development notes；
+- 可以生成文章结构和章节要点；
+- 可以做局部改写、润色和规则对齐；
+- 缺失真实问题、失败尝试或技术取舍时，只生成 `material_gaps`；
+- 禁止凭空补写不存在的开发经历；
+- `full_article_generation_allowed = false`。
+
+确定性素材包：
+
+```text
+scripts/article/build_article_material_pack.py
+```
+
 ### `harmony-article-check` v0.1
 
 回答：**“这篇征文现在是否具备发布资格，还缺什么？”**
@@ -128,7 +161,7 @@ Validation Artifact 契约：
 .atomcode/skills/harmony-article-check/SKILL.md
 ```
 
-检查结果严格区分：
+单项检查状态：
 
 ```text
 PASS
@@ -139,7 +172,7 @@ POST_PUBLISH
 NOT_APPLICABLE
 ```
 
-完整发布状态：
+完整发布前状态：
 
 ```text
 BLOCKED
@@ -147,13 +180,34 @@ MANUAL_REVIEW_REQUIRED
 READY_TO_PUBLISH
 ```
 
-当前确定性文章静态检查器：
+同时输出：
+
+```text
+publishable = true | false
+```
+
+真实输入只有在全部发布前规则通过时才能：
+
+```text
+status = READY_TO_PUBLISH
+publishable = true
+```
+
+fixture 即使为了回归测试覆盖 `READY_TO_PUBLISH` 分支，也必须：
+
+```text
+fixture_only = true
+publishable = false
+```
+
+当前确定性文章工具：
 
 ```text
 scripts/article/check_article_static.py
+scripts/article/build_compliance_report.py
 ```
 
-已自动检查：
+静态检查自动覆盖：
 
 - H1 标题是否明确包含框架/技术栈；
 - 去除 fenced/inline code 后非代码中文字符是否 `>= 800`；
@@ -314,7 +368,7 @@ NOT_RUN
 MISSING
 ```
 
-`VERIFIED` 必须附真实 evidence。
+`VERIFIED` 必须附 evidence。
 
 `device_run=VERIFIED` 还要求：
 
@@ -324,6 +378,54 @@ platform = HarmonyOS | OpenHarmony
 ```
 
 模拟器/预览器不能满足活动真机门禁。
+
+普通 validation artifact 中出现：
+
+```text
+fixture://...
+```
+
+会被直接拒绝。只有显式测试夹具允许：
+
+```text
+fixture_only = true
+```
+
+## Fixture-only E2E
+
+目录：
+
+```text
+examples/e2e-fixture/
+```
+
+它端到端覆盖：
+
+```text
+qualification
+→ validation gate
+→ article material pack
+→ article static check
+→ compliance report
+```
+
+所有输入都带：
+
+```text
+fixture_only = true
+```
+
+所有测试证据使用：
+
+```text
+fixture://...
+```
+
+该样例**不是实际适配案例**，不能作为征文、真机运行或活动资格证据。完整说明见：
+
+```text
+examples/e2e-fixture/README.md
+```
 
 ## CI / 测试分层
 
@@ -342,6 +444,9 @@ platform = HarmonyOS | OpenHarmony
 - validation gate；
 - article-rules schema；
 - article static checker；
+- full article compliance report；
+- article material pack；
+- fixture-only article pipeline E2E；
 - GitHub Actions Node 24 runtime guard。
 
 第一方 GitHub Actions 最低版本：
@@ -359,7 +464,27 @@ actions/setup-node      >= v6
 .github/workflows/pi-skill-test.yml
 ```
 
-自动使用：
+使用隔离 matrix job，当前 5 个 contract 首轮全部通过：
+
+```text
+contract-discovery
+contract-official-handoff
+contract-orchestrator
+contract-article-check
+contract-article-writing
+```
+
+关键 CI 策略：
+
+```text
+fail-fast = false
+max-parallel = 2
+Pi 单次调用 timeout = 180s
+```
+
+这样单个 LLM contract 漂移不会吞掉其他 Skill 的测试结果。
+
+模型配置：
 
 ```text
 agnes-2.5-flash
@@ -393,6 +518,8 @@ API Key 不进入仓库。
 - `cached_network_image` → `EXCLUDED_NO_ADAPTATION_NEEDED`
 - `audioplayers` → required 活动去重明确命中 → `EXCLUDED_ALREADY_ADAPTED`
 
+这些样本用于验证候选资格判断，不代表本仓库完成了它们的实际适配。
+
 ### Official Skills Audits
 
 ```text
@@ -409,6 +536,7 @@ API Key 不进入仓库。
 .atomcode/skills/
 ├── thirdparty-library-discovery/
 ├── harmony-contribution-orchestrator/
+├── harmony-article-writing/
 └── harmony-article-check/
 
 resources/
@@ -422,7 +550,12 @@ scripts/
 │   ├── resolve_next_action.py
 │   └── resolve_validation_gate.py
 └── article/
-    └── check_article_static.py
+    ├── build_article_material_pack.py
+    ├── check_article_static.py
+    └── build_compliance_report.py
+
+examples/
+└── e2e-fixture/
 
 tests/unit/
 ├── test_discovery_helpers.py
@@ -431,7 +564,10 @@ tests/unit/
 ├── test_orchestrator_next_action.py
 ├── test_validation_gate.py
 ├── test_article_rules.py
-└── test_article_static_check.py
+├── test_article_static_check.py
+├── test_article_compliance_report.py
+├── test_article_material_pack.py
+└── test_e2e_article_fixture.py
 ```
 
 ## Roadmap
@@ -447,14 +583,20 @@ tests/unit/
 - [x] `qualification → gate → route → next_action`
 - [x] Validation Artifact + deterministic Validation Gate
 - [x] `resources/article-rules.yaml`
-- [x] `harmony-article-check` v0.1 + deterministic static checker
+- [x] `harmony-article-check` v0.1
+- [x] full article compliance report aggregator
+- [x] `harmony-article-writing` v0.1
+- [x] article material pack
+- [x] 5 个独立 Pi Skill contract matrix
+- [x] fixture-only article pipeline E2E
+- [x] fixture evidence 防污染保护
 - [x] Node 24 GitHub Actions 迁移与静态版本守卫
-- [ ] 为 `harmony-article-check` 增加 Pi contract
-- [ ] 实现完整 article compliance report aggregator（static + validation + external/manual evidence）
-- [ ] 实现 `harmony-article-writing`
-- [ ] 增加真实适配完成后的 validation/article-check 样例
+- [ ] 增加**真实适配完成**后的 validation/article-check 案例
+- [ ] 增加真实案例 evidence intake/template，降低接入成本
 - [ ] 如有分发需求，再增加 AtomCode Plugin/Marketplace 元数据
 
 ## 下一步
 
-优先完成 `harmony-article-check` 的模型契约与完整 compliance report 聚合层；稳定后再实现 `harmony-article-writing`。这样写作 Skill 生成或修改文章后，可以立即交给确定性/结构化检查，而不是“先写再猜是否合规”。
+当前架构链路和合成 E2E 已闭环，下一优先级不再是继续增加抽象 Skill，而是接入**一个真实适配案例**。
+
+在没有真实 commit、构建日志、测试结果、HarmonyOS/OpenHarmony 实体设备运行和截图前，本仓库不会伪造“真实案例已完成”。下一阶段先提供 real-case evidence intake/template；一旦有真实适配项目，即可用同一套 deterministic gate、material pack 和 article compliance 流程做首个真实验收。
