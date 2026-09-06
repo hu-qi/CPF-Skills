@@ -57,7 +57,7 @@ MISSING
 - evidence 只保存真实存在的路径、URL、commit、日志、报告、截图等引用；
 - 不能把文字描述本身当成“已验证证据”。
 
-典型引用示例：
+典型真实引用示例：
 
 ```text
 commit://abc123
@@ -68,6 +68,32 @@ image://artifacts/device-run.png
 ```
 
 实际流水线可以采用其他引用格式，只要引用非空且能够定位真实产物。
+
+## Fixture 隔离
+
+仓库回归测试允许显式 fixture：
+
+```json
+{
+  "fixture_only": true
+}
+```
+
+fixture 的测试引用使用：
+
+```text
+fixture://...
+```
+
+规则：
+
+- `fixture://` 只允许在顶层 `fixture_only=true` 的 Validation 输入中使用；
+- 普通/真实输入省略 `fixture_only` 或使用 `fixture_only=false`；
+- 真实输入出现任何 `fixture://` evidence 时，artifact 无效并直接拒绝；
+- Validation Gate 输出会继续携带 `fixture_only`，供 Article Material Pack / Compliance 保持来源语义；
+- fixture 可以覆盖 `ARTICLE_PREP/PROCEED` 状态分支进行回归，但不能据此声称现实适配已经验证完成。
+
+因此，不得通过删除 `fixture_only` 字段，把测试 evidence 变成“真实 evidence”。
 
 ## 真机约束
 
@@ -92,10 +118,11 @@ OpenHarmony
 
 模拟器、预览器、Android/iOS 设备不能满足本活动的真机运行门禁。
 
-## 完整输入示例
+## 完整真实输入示例
 
 ```json
 {
+  "fixture_only": false,
   "framework": "arkts",
   "candidate": "example-library",
   "validation": {
@@ -145,6 +172,12 @@ phase = ARTICLE_PREP
 decision = PROCEED
 ```
 
+同时保留输入的：
+
+```text
+fixture_only = true | false
+```
+
 ### 存在失败或缺项
 
 任一项为 `FAILED` / `NOT_RUN` / `MISSING`：
@@ -163,6 +196,8 @@ decision = BLOCKED
 - 缺少任一 required check；
 - 出现未知 check；
 - 状态 token 非法；
+- `fixture_only` 不是 boolean；
+- 真实模式中出现 `fixture://` evidence；
 - `VERIFIED` 没有 evidence；
 - `device_run=VERIFIED` 但不是 physical device；
 - `device_run=VERIFIED` 但平台不是 HarmonyOS/OpenHarmony。
@@ -175,5 +210,7 @@ Validation Gate 证明的是“文章准备所需技术证据已齐”，不是�
 - 文章已经通过活动合规检查；
 - CSDN 质量分已经达到要求；
 - 发布后阅读量已经达到目标。
+
+如果 `fixture_only=true`，它甚至不证明现实技术证据已齐，只证明测试夹具成功覆盖该状态机分支。
 
 这些属于后续 `ARTICLE_PREP` / `ARTICLE_CHECK` / 发布后跟踪阶段。
