@@ -75,3 +75,10 @@ run_contract \
   ".atomcode/skills/harmony-contribution-orchestrator/SKILL.md" \
   "tests/pi/orchestrator-contract.prompt.md" \
   "tests/pi/assert_orchestrator_contract.py"
+
+run_contract \
+  "article-check-contract" \
+  "harmony-article-check" \
+  ".atomcode/skills/harmony-article-check/SKILL.md" \
+  "tests/pi/article-check-contract.prompt.md" \
+  "tests/pi/assert_article_check_contract.py"
