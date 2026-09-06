@@ -3,6 +3,13 @@ schema_version: 1
 # 这里只维护候选发现、去重和官方 Skill 路由所需的可变事实。
 # 版本号、SDK 版本等如果不是当前流程必需，不在这里提前固化；需要时应实时确认。
 
+# 一个社区/框架族可能包含多个互斥技术栈。族名不能静默映射到其中一个变体，
+# 调用方必须显式选择具体 variant，避免把 C/C++ 任务误送入 ArkTS porting Skill。
+framework_families:
+  applicationtpc:
+    aliases: [applicationtpc, application-tpc]
+    variants: [arkts, cpp]
+
 frameworks:
   flutter:
     display_name: Flutter
@@ -69,7 +76,7 @@ frameworks:
 
   arkts:
     display_name: ApplicationTPC (ArkTS)
-    aliases: [arkts, applicationtpc, applicationtpc-arkts]
+    aliases: [arkts, applicationtpc-arkts]
     discovery_status: experimental
     version_policy: latest
     discovery_sources:
