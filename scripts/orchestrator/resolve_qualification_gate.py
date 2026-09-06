@@ -21,11 +21,27 @@ EXCLUDED_STATUSES = {
     "EXCLUDED_UNVERIFIABLE",
 }
 
+FIXTURE_EVIDENCE_PREFIX = "fixture://"
+
 
 def require_dict(value: Any, name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{name} must be an object")
     return value
+
+
+def find_fixture_refs(value: Any) -> list[str]:
+    refs: list[str] = []
+    if isinstance(value, str):
+        if value.startswith(FIXTURE_EVIDENCE_PREFIX):
+            refs.append(value)
+    elif isinstance(value, list):
+        for item in value:
+            refs.extend(find_fixture_refs(item))
+    elif isinstance(value, dict):
+        for item in value.values():
+            refs.extend(find_fixture_refs(item))
+    return refs
 
 
 def resolve_gate(payload: dict[str, Any]) -> dict[str, Any]:
@@ -35,6 +51,15 @@ def resolve_gate(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("framework must be a non-empty string")
     if not isinstance(candidate, str) or not candidate.strip():
         raise ValueError("candidate must be a non-empty string")
+
+    fixture_only = payload.get("fixture_only", False)
+    if not isinstance(fixture_only, bool):
+        raise ValueError("fixture_only must be a boolean when provided")
+    fixture_refs = find_fixture_refs(payload)
+    if fixture_refs and not fixture_only:
+        raise ValueError(
+            "fixture:// evidence is test-only; set fixture_only=true only for explicit regression fixtures"
+        )
 
     qualification = require_dict(payload.get("qualification"), "qualification")
     status = qualification.get("status")
@@ -55,6 +80,7 @@ def resolve_gate(payload: dict[str, Any]) -> dict[str, Any]:
 
     result: dict[str, Any] = {
         "schema_version": 1,
+        "fixture_only": fixture_only,
         "framework": framework,
         "candidate": candidate,
         "qualification_status": status,
@@ -110,7 +136,11 @@ def resolve_gate(payload: dict[str, Any]) -> dict[str, Any]:
         {
             "phase": "ADAPTATION",
             "decision": "PROCEED",
-            "next_action": "按当前框架官方 Skills 路由进入实际适配；不得把资格检查 Skill 当作适配实现 Skill。",
+            "next_action": (
+                "测试夹具只覆盖 ADAPTATION/PROCEED 状态分支，不得据此执行或宣称真实适配。"
+                if fixture_only
+                else "按当前框架官方 Skills 路由进入实际适配；不得把资格检查 Skill 当作适配实现 Skill。"
+            ),
         }
     )
     return result
