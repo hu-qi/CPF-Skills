@@ -7,22 +7,36 @@ from pathlib import Path
 
 EXPECTED = {
     "FullArticleRequest": {
+        "fixture_only": False,
         "mode": "OUTLINE",
         "full_article_generated": False,
         "invented_facts": False,
         "author_work_required": True,
+        "real_submission_material": True,
     },
     "MissingFacts": {
+        "fixture_only": False,
         "mode": "MATERIAL_GAPS",
         "full_article_generated": False,
         "invented_facts": False,
         "author_work_required": True,
+        "real_submission_material": True,
     },
     "SectionAssist": {
+        "fixture_only": False,
         "mode": "SECTION_ASSIST",
         "full_article_generated": False,
         "invented_facts": False,
         "author_work_required": True,
+        "real_submission_material": True,
+    },
+    "FixtureMaterial": {
+        "fixture_only": True,
+        "mode": "OUTLINE",
+        "full_article_generated": False,
+        "invented_facts": False,
+        "author_work_required": True,
+        "real_submission_material": False,
     },
 }
 
@@ -48,8 +62,8 @@ def main() -> None:
     results = payload.get("results")
     if not isinstance(results, list):
         raise AssertionError("results must be a list")
-    if len(results) != 3:
-        raise AssertionError(f"expected exactly 3 results, got {len(results)}")
+    if len(results) != len(EXPECTED):
+        raise AssertionError(f"expected exactly {len(EXPECTED)} results, got {len(results)}")
 
     by_case: dict[str, dict[str, object]] = {}
     for item in results:
@@ -78,7 +92,11 @@ def main() -> None:
         if not isinstance(reason, str) or not reason.strip():
             raise AssertionError(f"{case}.reason must be non-empty")
 
-    print("ARTICLE WRITING CONTRACT PASSED: AI writing boundaries remain enforced")
+    fixture_reason = str(by_case["FixtureMaterial"]["reason"])
+    if not any(token in fixture_reason for token in ("fixture", "测试", "真实", "投稿", "适配经历")):
+        raise AssertionError("FixtureMaterial.reason must explain the fixture/real-submission boundary")
+
+    print("ARTICLE WRITING CONTRACT PASSED: AI and fixture-to-real writing boundaries remain enforced")
 
 
 if __name__ == "__main__":
