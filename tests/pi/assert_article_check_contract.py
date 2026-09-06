@@ -7,6 +7,8 @@ from pathlib import Path
 
 EXPECTED = {
     "MissingExternal": {
+        "fixture_only": False,
+        "publishable": False,
         "status": "BLOCKED",
         "duplication_rate": "EXTERNAL_REQUIRED",
         "csdn_quality": "EXTERNAL_REQUIRED",
@@ -16,6 +18,8 @@ EXPECTED = {
         "readership": "POST_PUBLISH",
     },
     "ReadyArticle": {
+        "fixture_only": False,
+        "publishable": True,
         "status": "READY_TO_PUBLISH",
         "duplication_rate": "PASS",
         "csdn_quality": "PASS",
@@ -25,12 +29,25 @@ EXPECTED = {
         "readership": "POST_PUBLISH",
     },
     "GitCodeArticle": {
+        "fixture_only": False,
+        "publishable": False,
         "status": "BLOCKED",
         "duplication_rate": "PASS",
         "csdn_quality": "PASS",
         "original_content": "PASS",
         "ai_not_majority": "PASS",
         "gitcode_forbidden": "FAIL",
+        "readership": "POST_PUBLISH",
+    },
+    "FixtureReady": {
+        "fixture_only": True,
+        "publishable": False,
+        "status": "READY_TO_PUBLISH",
+        "duplication_rate": "PASS",
+        "csdn_quality": "PASS",
+        "original_content": "PASS",
+        "ai_not_majority": "PASS",
+        "gitcode_forbidden": "PASS",
         "readership": "POST_PUBLISH",
     },
 }
@@ -57,8 +74,8 @@ def main() -> None:
     results = payload.get("results")
     if not isinstance(results, list):
         raise AssertionError("results must be a list")
-    if len(results) != 3:
-        raise AssertionError(f"expected exactly 3 results, got {len(results)}")
+    if len(results) != len(EXPECTED):
+        raise AssertionError(f"expected exactly {len(EXPECTED)} results, got {len(results)}")
 
     by_case: dict[str, dict[str, object]] = {}
     for item in results:
@@ -87,7 +104,11 @@ def main() -> None:
         if not isinstance(reason, str) or not reason.strip():
             raise AssertionError(f"{case}.reason must be non-empty")
 
-    print("ARTICLE CHECK CONTRACT PASSED: external, manual and post-publish states remain distinct")
+    fixture_reason = str(by_case["FixtureReady"]["reason"])
+    if not any(token in fixture_reason for token in ("fixture", "测试", "现实", "真实", "发布资格")):
+        raise AssertionError("FixtureReady.reason must explain why fixture data is not real publishability evidence")
+
+    print("ARTICLE CHECK CONTRACT PASSED: publishability, fixture, external, manual and post-publish states remain distinct")
 
 
 if __name__ == "__main__":
