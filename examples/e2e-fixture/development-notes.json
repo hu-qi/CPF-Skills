@@ -1,0 +1,28 @@
+{
+  "fixture_only": true,
+  "summary": "合成测试记录：仅验证文章素材包字段映射，不代表真实适配经历。",
+  "problems": [
+    {
+      "title": "Fixture problem",
+      "description": "仅用于验证 problems 字段能够进入文章素材包。",
+      "evidence": ["fixture://notes/problem"]
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Fixture decision",
+      "reason": "仅用于验证 decisions 字段映射。",
+      "evidence": ["fixture://notes/decision"]
+    }
+  ],
+  "api_changes": [
+    {
+      "api": "fixtureApi",
+      "change": "仅用于测试 api_changes 映射，不代表真实接口变更。"
+    }
+  ],
+  "source_refs": [
+    "fixture://notes/source-commit",
+    "fixture://notes/source-log"
+  ]
+}
