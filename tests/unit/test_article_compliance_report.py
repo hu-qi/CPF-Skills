@@ -40,15 +40,17 @@ def static_report() -> dict:
     }
 
 
-def validation_gate(*, ready: bool = True) -> dict:
+def validation_gate(*, ready: bool = True, fixture_only: bool = False) -> dict:
     status = "VERIFIED" if ready else "MISSING"
+    prefix = "fixture://" if fixture_only else "artifact://"
     checks = {}
     for name in ("implementation", "build", "demo", "tests", "device_run", "screenshots"):
         checks[name] = {
             "status": status,
-            "evidence": [f"artifact://{name}"] if ready else [],
+            "evidence": [f"{prefix}{name}"] if ready else [],
         }
     return {
+        "fixture_only": fixture_only,
         "framework": "flutter",
         "candidate": "ExamplePlugin",
         "phase": "ARTICLE_PREP" if ready else "VALIDATION",
@@ -57,14 +59,22 @@ def validation_gate(*, ready: bool = True) -> dict:
     }
 
 
-def confirmed_context(*, duplication: float | None = 20, csdn: float | None = 85, readership: float | None = None) -> dict:
+def confirmed_context(
+    *,
+    duplication: float | None = 20,
+    csdn: float | None = 85,
+    readership: float | None = None,
+    fixture_only: bool = False,
+) -> dict:
+    prefix = "fixture://" if fixture_only else "confirmation://"
     confirmations = {}
     for rule_id in aggregator.MANUAL_RULE_IDS:
         confirmations[rule_id] = {
             "status": "CONFIRMED",
-            "evidence": [f"confirmation://{rule_id}"],
+            "evidence": [f"{prefix}{rule_id}"],
         }
     return {
+        "fixture_only": fixture_only,
         "external_metrics": {
             "duplication_rate_percent": duplication,
             "csdn_quality_score": csdn,
@@ -90,6 +100,8 @@ def check_by_id(report: dict, rule_id: str) -> dict:
 def test_fully_confirmed_pre_publish_rules_are_ready() -> None:
     report = build()
     assert report["status"] == "READY_TO_PUBLISH"
+    assert report["fixture_only"] is False
+    assert report["publishable"] is True
     assert report["blocking_rules"] == []
     assert report["manual_rules"] == []
     assert report["external_rules"] == []
@@ -100,6 +112,7 @@ def test_fully_confirmed_pre_publish_rules_are_ready() -> None:
 def test_missing_external_metrics_block() -> None:
     report = build(context=confirmed_context(duplication=None, csdn=None))
     assert report["status"] == "BLOCKED"
+    assert report["publishable"] is False
     assert set(report["external_rules"]) == {"duplication-rate", "csdn-quality-check"}
     assert "duplication-rate" in report["blocking_rules"]
     assert "csdn-quality-check" in report["blocking_rules"]
@@ -110,6 +123,7 @@ def test_manual_confirmations_do_not_get_auto_passed() -> None:
     context["confirmations"].pop("original-content")
     report = build(context=context)
     assert report["status"] == "MANUAL_REVIEW_REQUIRED"
+    assert report["publishable"] is False
     assert "original-content" in report["manual_rules"]
     assert check_by_id(report, "original-content")["status"] == "MANUAL_REQUIRED"
 
@@ -117,6 +131,7 @@ def test_manual_confirmations_do_not_get_auto_passed() -> None:
 def test_validation_gate_blocks_article_readiness() -> None:
     report = build(validation=validation_gate(ready=False))
     assert report["status"] == "BLOCKED"
+    assert report["publishable"] is False
     assert "validation-gate" in report["blocking_rules"]
     for rule_id in aggregator.VALIDATION_RULE_TO_CHECK:
         assert check_by_id(report, rule_id)["status"] == "FAIL"
@@ -131,16 +146,41 @@ def test_failed_static_rule_blocks() -> None:
     static["static_status"] = "BLOCKED"
     report = build(static=static)
     assert report["status"] == "BLOCKED"
+    assert report["publishable"] is False
     assert "gitcode-forbidden" in report["blocking_rules"]
 
 
 def test_low_readership_never_blocks_pre_publish() -> None:
     report = build(context=confirmed_context(readership=10))
     assert report["status"] == "READY_TO_PUBLISH"
+    assert report["publishable"] is True
     readership = check_by_id(report, "readership")
     assert readership["status"] == "POST_PUBLISH"
     assert "尚未确认达到目标" in readership["reason"]
     assert "readership" not in report["blocking_rules"]
+
+
+def test_fixture_report_can_cover_ready_branch_but_is_never_publishable() -> None:
+    report = build(
+        validation=validation_gate(fixture_only=True),
+        context=confirmed_context(fixture_only=True),
+    )
+    assert report["status"] == "READY_TO_PUBLISH"
+    assert report["fixture_only"] is True
+    assert report["publishable"] is False
+    assert any("不得作为真实文章发布资格" in item for item in report["next_actions"])
+
+
+def test_fixture_mode_mismatch_is_rejected() -> None:
+    try:
+        build(
+            validation=validation_gate(fixture_only=True),
+            context=confirmed_context(fixture_only=False),
+        )
+    except ValueError as exc:
+        assert "fixture_only flags must match" in str(exc)
+    else:
+        raise AssertionError("fixture mode mismatch must be rejected")
 
 
 def main() -> None:
@@ -150,6 +190,8 @@ def main() -> None:
     test_validation_gate_blocks_article_readiness()
     test_failed_static_rule_blocks()
     test_low_readership_never_blocks_pre_publish()
+    test_fixture_report_can_cover_ready_branch_but_is_never_publishable()
+    test_fixture_mode_mismatch_is_rejected()
     print("ARTICLE COMPLIANCE TESTS PASSED: full pre-publish status is deterministic")
 
 
