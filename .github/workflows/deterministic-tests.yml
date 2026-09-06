@@ -63,3 +63,6 @@ jobs:
 
       - name: Run deterministic orchestrator next-action regressions
         run: python3 tests/unit/test_orchestrator_next_action.py
+
+      - name: Run deterministic validation gate regressions
+        run: python3 tests/unit/test_validation_gate.py
