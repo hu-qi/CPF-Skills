@@ -18,31 +18,87 @@ def require_dict(value: Any, name: str) -> dict[str, Any]:
     return value
 
 
-def load_frameworks(path: Path) -> dict[str, Any]:
+def require_string_list(value: Any, name: str) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{name} must be a string list")
+    return value
+
+
+def load_framework_config(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     root = require_dict(data, "framework config")
     frameworks = require_dict(root.get("frameworks"), "frameworks")
+    families = require_dict(root.get("framework_families", {}), "framework_families")
+    return frameworks, families
+
+
+def load_frameworks(path: Path) -> dict[str, Any]:
+    frameworks, _ = load_framework_config(path)
     return frameworks
 
 
-def resolve_framework_key(framework: str, frameworks: dict[str, Any]) -> str:
+def resolve_framework_key(
+    framework: str,
+    frameworks: dict[str, Any],
+    framework_families: dict[str, Any] | None = None,
+) -> str:
     wanted = framework.strip().lower()
     if not wanted:
         raise ValueError("framework must be a non-empty string")
 
+    families = framework_families or {}
+    for family_key, raw in families.items():
+        config = require_dict(raw, f"framework_families.{family_key}")
+        aliases = require_string_list(
+            config.get("aliases", []),
+            f"framework_families.{family_key}.aliases",
+        )
+        names = {str(family_key).lower(), *(item.lower() for item in aliases)}
+        if wanted not in names:
+            continue
+
+        variants = require_string_list(
+            config.get("variants", []),
+            f"framework_families.{family_key}.variants",
+        )
+        if not variants:
+            raise ValueError(
+                f"framework family {family_key!r} must declare at least one variant"
+            )
+        unknown_variants = [variant for variant in variants if variant not in frameworks]
+        if unknown_variants:
+            raise ValueError(
+                f"framework family {family_key!r} references unsupported variants: "
+                + ", ".join(unknown_variants)
+            )
+        raise ValueError(
+            f"ambiguous framework family: {framework!r}; choose one of: "
+            + ", ".join(variants)
+        )
+
+    matches: list[str] = []
     for key, raw in frameworks.items():
         config = require_dict(raw, f"frameworks.{key}")
-        aliases = config.get("aliases", [])
-        if not isinstance(aliases, list) or not all(isinstance(item, str) for item in aliases):
-            raise ValueError(f"frameworks.{key}.aliases must be a string list")
+        aliases = require_string_list(config.get("aliases", []), f"frameworks.{key}.aliases")
         names = {str(key).lower(), *(item.lower() for item in aliases)}
         if wanted in names:
-            return str(key)
+            matches.append(str(key))
 
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError(
+            f"ambiguous framework alias: {framework!r}; matches: "
+            + ", ".join(matches)
+        )
     raise ValueError(f"unsupported framework: {framework!r}")
 
 
-def resolve_route(gate: dict[str, Any], frameworks: dict[str, Any]) -> dict[str, Any]:
+def resolve_route(
+    gate: dict[str, Any],
+    frameworks: dict[str, Any],
+    framework_families: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     framework = gate.get("framework")
     candidate = gate.get("candidate")
     phase = gate.get("phase")
@@ -55,7 +111,7 @@ def resolve_route(gate: dict[str, Any], frameworks: dict[str, Any]) -> dict[str,
     if not isinstance(phase, str) or not isinstance(decision, str):
         raise ValueError("gate.phase and gate.decision must be strings")
 
-    key = resolve_framework_key(framework, frameworks)
+    key = resolve_framework_key(framework, frameworks, framework_families)
     framework_config = require_dict(frameworks[key], f"frameworks.{key}")
     skills = require_dict(framework_config.get("official_skills", {}), f"frameworks.{key}.official_skills")
 
@@ -126,7 +182,8 @@ def main() -> None:
         raise SystemExit("gate artifact must be a JSON object")
 
     try:
-        route = resolve_route(gate, load_frameworks(frameworks_path))
+        frameworks, framework_families = load_framework_config(frameworks_path)
+        route = resolve_route(gate, frameworks, framework_families)
     except ValueError as exc:
         raise SystemExit(f"cannot resolve framework route: {exc}") from exc
 
