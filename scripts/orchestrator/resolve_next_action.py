@@ -73,6 +73,7 @@ def resolve_next_action(
     gate = resolve_gate(payload)
     result: dict[str, Any] = {
         "schema_version": 1,
+        "fixture_only": gate["fixture_only"],
         "framework": gate["framework"],
         "candidate": gate["candidate"],
         "phase": gate["phase"],
@@ -102,6 +103,11 @@ def resolve_next_action(
             else None,
             "official_repository": framework_route["official_repository"],
         }
+        if gate["fixture_only"]:
+            result["next_action"] = (
+                "fixture_only 仅用于回归测试；不调用官方适配 Skill、不执行人工真实适配，也不生成现实适配声明。"
+            )
+            return result
         if framework_route["route_type"] == "MANUAL_REQUIRED":
             if framework_route["analysis_skill"]:
                 result["next_action"] = (
@@ -120,6 +126,11 @@ def resolve_next_action(
         and gate["decision"] == "BLOCKED"
         and gate["qualification_status"] == "NEEDS_OFFICIAL_CHECK"
     ):
+        if gate["fixture_only"]:
+            result["next_action"] = (
+                "fixture_only 仅用于回归测试；不调用真实官方 qualification Skill。"
+            )
+            return result
         framework_key = resolve_framework_key(
             gate["framework"],
             frameworks,
