@@ -79,3 +79,6 @@ jobs:
 
       - name: Run full article compliance aggregation regressions
         run: python3 tests/unit/test_article_compliance_report.py
+
+      - name: Run article material pack regressions
+        run: python3 tests/unit/test_article_material_pack.py
