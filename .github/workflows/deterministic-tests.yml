@@ -16,6 +16,7 @@ on:
       - "scripts/ci/check-github-actions-runtime.py"
       - "resources/frameworks.yaml"
       - "resources/article-rules.yaml"
+      - "examples/e2e-fixture/**"
       - ".github/workflows/**"
   pull_request:
     paths:
@@ -30,6 +31,7 @@ on:
       - "scripts/ci/check-github-actions-runtime.py"
       - "resources/frameworks.yaml"
       - "resources/article-rules.yaml"
+      - "examples/e2e-fixture/**"
       - ".github/workflows/**"
   workflow_dispatch:
 
@@ -82,3 +84,6 @@ jobs:
 
       - name: Run article material pack regressions
         run: python3 tests/unit/test_article_material_pack.py
+
+      - name: Run fixture-only article pipeline E2E regression
+        run: python3 tests/unit/test_e2e_article_fixture.py
