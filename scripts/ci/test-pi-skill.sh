@@ -5,6 +5,18 @@ set -euo pipefail
 : "${AGNES_BASE_URL:?AGNES_BASE_URL is required}"
 : "${PI_MODEL:?PI_MODEL is required}"
 
+if [[ $# -ne 5 ]]; then
+  echo "usage: test-pi-skill.sh <contract-name> <skill-name> <skill-path> <prompt-file> <assert-script>" >&2
+  exit 2
+fi
+
+CONTRACT_NAME="$1"
+SKILL_NAME="$2"
+SKILL_PATH="$3"
+PROMPT_FILE="$4"
+ASSERT_SCRIPT="$5"
+PI_CONTRACT_TIMEOUT_SECONDS="${PI_CONTRACT_TIMEOUT_SECONDS:-180}"
+
 mkdir -p "$HOME/.pi/agent" .artifacts/pi
 
 python3 - "$HOME/.pi/agent/models.json" <<'PY'
@@ -32,53 +44,18 @@ config = {
 path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
-run_contract() {
-  local name="$1"
-  local skill_name="$2"
-  local skill_path="$3"
-  local prompt_file="$4"
-  local assert_script="$5"
-  local output_file=".artifacts/pi/${name}-${PI_MODEL}.md"
-  local case_prompt
-  case_prompt="$(cat "$prompt_file")"
+OUTPUT_FILE=".artifacts/pi/${CONTRACT_NAME}-${PI_MODEL}.md"
+CASE_PROMPT="$(cat "$PROMPT_FILE")"
+PROMPT="/skill:${SKILL_NAME} ${CASE_PROMPT}"
 
-  local prompt="/skill:${skill_name} ${case_prompt}"
-
+timeout "${PI_CONTRACT_TIMEOUT_SECONDS}s" \
   pi \
     --provider agnes-cn \
     --model "$PI_MODEL" \
     --no-session \
-    --skill "$skill_path" \
-    -p "$prompt" \
-    | tee "$output_file"
+    --no-tools \
+    --skill "$SKILL_PATH" \
+    -p "$PROMPT" \
+  | tee "$OUTPUT_FILE"
 
-  python3 "$assert_script" "$output_file"
-}
-
-run_contract \
-  "discovery-contract" \
-  "thirdparty-library-discovery" \
-  ".atomcode/skills/thirdparty-library-discovery/SKILL.md" \
-  "tests/pi/discovery-contract.prompt.md" \
-  "tests/pi/assert_discovery_contract.py"
-
-run_contract \
-  "official-handoff-contract" \
-  "thirdparty-library-discovery" \
-  ".atomcode/skills/thirdparty-library-discovery/SKILL.md" \
-  "tests/pi/official-handoff-contract.prompt.md" \
-  "tests/pi/assert_official_handoff_contract.py"
-
-run_contract \
-  "orchestrator-contract" \
-  "harmony-contribution-orchestrator" \
-  ".atomcode/skills/harmony-contribution-orchestrator/SKILL.md" \
-  "tests/pi/orchestrator-contract.prompt.md" \
-  "tests/pi/assert_orchestrator_contract.py"
-
-run_contract \
-  "article-check-contract" \
-  "harmony-article-check" \
-  ".atomcode/skills/harmony-article-check/SKILL.md" \
-  "tests/pi/article-check-contract.prompt.md" \
-  "tests/pi/assert_article_check_contract.py"
+python3 "$ASSERT_SCRIPT" "$OUTPUT_FILE"
