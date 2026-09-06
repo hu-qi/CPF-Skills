@@ -32,9 +32,10 @@ def qualification(
     *,
     eligible: bool = True,
     pending: list[str] | None = None,
+    fixture_only: bool = False,
 ) -> dict:
     return {
-        "fixture_only": False,
+        "fixture_only": fixture_only,
         "framework": framework,
         "candidate": "ExampleLibrary",
         "qualification": {
@@ -43,7 +44,9 @@ def qualification(
             "reason": "deterministic test input",
             "pending_checks": pending or [],
         },
-        "evidence": ["artifact://qualification"],
+        "evidence": [
+            "fixture://qualification" if fixture_only else "artifact://qualification"
+        ],
     }
 
 
@@ -57,6 +60,7 @@ def resolve(payload: dict) -> dict:
 
 def test_arkts_recommended_routes_to_official_porting() -> None:
     result = resolve(qualification("applicationtpc-arkts"))
+    assert result["fixture_only"] is False
     assert result["framework"] == "arkts"
     assert result["phase"] == "ADAPTATION"
     assert result["decision"] == "PROCEED"
@@ -111,6 +115,40 @@ def test_excluded_candidate_does_not_route_to_framework_skill() -> None:
     assert result["route"]["source"] == "manual"
 
 
+def test_fixture_recommended_case_never_routes_real_official_skill() -> None:
+    result = resolve(
+        qualification(
+            "applicationtpc-arkts",
+            fixture_only=True,
+        )
+    )
+    assert result["fixture_only"] is True
+    assert result["phase"] == "ADAPTATION"
+    assert result["decision"] == "PROCEED"
+    assert result["route"]["type"] == "BLOCKED_BY_GATE"
+    assert result["route"]["skill"] is None
+    assert result["route"]["analysis_skill"] is None
+    assert "fixture_only" in result["next_action"]
+    assert "不调用官方适配 Skill" in result["next_action"]
+
+
+def test_fixture_pending_check_never_routes_real_qualification_skill() -> None:
+    result = resolve(
+        qualification(
+            "flutter",
+            "NEEDS_OFFICIAL_CHECK",
+            eligible=False,
+            pending=["执行 flutter-library-search"],
+            fixture_only=True,
+        )
+    )
+    assert result["fixture_only"] is True
+    assert result["phase"] == "QUALIFICATION"
+    assert result["decision"] == "BLOCKED"
+    assert result["route"]["skill"] is None
+    assert "不调用真实官方 qualification Skill" in result["next_action"]
+
+
 def test_generic_applicationtpc_cannot_start_adaptation() -> None:
     try:
         resolve(qualification("applicationtpc"))
@@ -147,9 +185,11 @@ def main() -> None:
     test_cpp_recommended_preserves_analysis_but_requires_manual_implementation()
     test_flutter_pending_official_check_routes_confirmed_skill()
     test_excluded_candidate_does_not_route_to_framework_skill()
+    test_fixture_recommended_case_never_routes_real_official_skill()
+    test_fixture_pending_check_never_routes_real_qualification_skill()
     test_generic_applicationtpc_cannot_start_adaptation()
     test_multiple_pending_official_skills_are_rejected()
-    print("ORCHESTRATOR NEXT-ACTION TESTS PASSED: qualification and framework routing compose safely")
+    print("ORCHESTRATOR NEXT-ACTION TESTS PASSED: real routes compose safely and fixture routes stay non-operational")
 
 
 if __name__ == "__main__":
