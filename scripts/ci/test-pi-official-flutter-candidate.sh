@@ -42,6 +42,7 @@ activity_evidence_file="$artifact_dir/${FLUTTER_CANDIDATE}.activity-evidence.jso
 output_file="$artifact_dir/${FLUTTER_CANDIDATE}.md"
 normalized_file="$artifact_dir/${FLUTTER_CANDIDATE}.handoff.json"
 qualification_file="$artifact_dir/${FLUTTER_CANDIDATE}.qualification.json"
+gate_file="$artifact_dir/${FLUTTER_CANDIDATE}.gate.json"
 status_file="$artifact_dir/runner-status.json"
 
 # Network-facing evidence collection is deterministic and independently bounded.
@@ -112,6 +113,7 @@ ${evidence}
 fi
 
 qualification_built=false
+gate_built=false
 if [[ "$activity_collector_exit" -eq 0 && -s "$activity_evidence_file" && -s "$normalized_file" ]]; then
   python3 scripts/qualification/build_candidate_qualification.py \
     --framework flutter \
@@ -120,12 +122,16 @@ if [[ "$activity_collector_exit" -eq 0 && -s "$activity_evidence_file" && -s "$n
     --official-handoff "$normalized_file" \
     --output "$qualification_file"
   qualification_built=true
+
+  python3 scripts/orchestrator/resolve_qualification_gate.py \
+    "$qualification_file" "$gate_file"
+  gate_built=true
 fi
 
-printf '{"candidate":"%s","official_collector_exit":%s,"activity_collector_exit":%s,"pi_exit":%s,"normalized":true,"qualification_built":%s}\n' \
-  "$FLUTTER_CANDIDATE" "$official_collector_exit" "$activity_collector_exit" "$pi_exit" "$qualification_built" \
+printf '{"candidate":"%s","official_collector_exit":%s,"activity_collector_exit":%s,"pi_exit":%s,"normalized":true,"qualification_built":%s,"gate_built":%s}\n' \
+  "$FLUTTER_CANDIDATE" "$official_collector_exit" "$activity_collector_exit" "$pi_exit" "$qualification_built" "$gate_built" \
   > "$status_file"
 
-# Observational smoke: artifacts preserve both evidence sets, official judgment,
-# normalized handoff, and the deterministic final qualification artifact.
+# Observational smoke: artifacts preserve evidence, official judgment,
+# normalized handoff, deterministic qualification, and orchestrator gate.
 exit 0
