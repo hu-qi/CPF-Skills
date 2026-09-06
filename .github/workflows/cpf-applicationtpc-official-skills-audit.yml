@@ -1,0 +1,38 @@
+name: CPF-ApplicationTPC Official Skills Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/ci/fetch-cpf-applicationtpc-skills.sh"
+      - ".github/workflows/cpf-applicationtpc-official-skills-audit.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpf-applicationtpc-official-skills-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit-official-skills:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Audit CPF-ApplicationTPC official Skills
+        shell: bash
+        run: bash scripts/ci/fetch-cpf-applicationtpc-skills.sh
+
+      - name: Upload CPF-ApplicationTPC Skill audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpf-applicationtpc-official-skills-audit
+          path: .artifacts/official-skills/cpf-applicationtpc/
+          if-no-files-found: error
