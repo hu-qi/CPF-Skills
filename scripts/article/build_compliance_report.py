@@ -46,6 +46,8 @@ EXTERNAL_METRIC_RULES = {
     "csdn-quality-check": "csdn_quality_score",
 }
 
+FIXTURE_EVIDENCE_PREFIX = "fixture://"
+
 
 def require_dict(value: Any, name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
@@ -64,6 +66,20 @@ def require_fixture_flag(payload: dict[str, Any], name: str) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{name}.fixture_only must be a boolean when provided")
     return value
+
+
+def find_fixture_refs(value: Any) -> list[str]:
+    refs: list[str] = []
+    if isinstance(value, str):
+        if value.startswith(FIXTURE_EVIDENCE_PREFIX):
+            refs.append(value)
+    elif isinstance(value, list):
+        for item in value:
+            refs.extend(find_fixture_refs(item))
+    elif isinstance(value, dict):
+        for item in value.values():
+            refs.extend(find_fixture_refs(item))
+    return refs
 
 
 def load_rules(path: Path) -> dict[str, Any]:
@@ -254,6 +270,16 @@ def build_report(
     if validation_fixture_only != context_fixture_only:
         raise ValueError("validation gate and compliance context fixture_only flags must match")
     fixture_only = validation_fixture_only
+
+    if not fixture_only:
+        fixture_refs = [
+            *find_fixture_refs(validation_gate),
+            *find_fixture_refs(context),
+        ]
+        if fixture_refs:
+            raise ValueError(
+                "fixture:// evidence is test-only and cannot be used in a real compliance report"
+            )
 
     rules = collect_rules(rules_config)
     checks: list[dict[str, Any]] = []
