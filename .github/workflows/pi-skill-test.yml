@@ -7,21 +7,27 @@ on:
       - main
     paths:
       - ".atomcode/skills/thirdparty-library-discovery/**"
+      - ".atomcode/skills/harmony-contribution-orchestrator/**"
       - "resources/frameworks.yaml"
       - "tests/pi/discovery-contract.prompt.md"
       - "tests/pi/assert_discovery_contract.py"
       - "tests/pi/official-handoff-contract.prompt.md"
       - "tests/pi/assert_official_handoff_contract.py"
+      - "tests/pi/orchestrator-contract.prompt.md"
+      - "tests/pi/assert_orchestrator_contract.py"
       - "scripts/ci/test-pi-skill.sh"
       - ".github/workflows/pi-skill-test.yml"
   pull_request:
     paths:
       - ".atomcode/skills/thirdparty-library-discovery/**"
+      - ".atomcode/skills/harmony-contribution-orchestrator/**"
       - "resources/frameworks.yaml"
       - "tests/pi/discovery-contract.prompt.md"
       - "tests/pi/assert_discovery_contract.py"
       - "tests/pi/official-handoff-contract.prompt.md"
       - "tests/pi/assert_official_handoff_contract.py"
+      - "tests/pi/orchestrator-contract.prompt.md"
+      - "tests/pi/assert_orchestrator_contract.py"
       - "scripts/ci/test-pi-skill.sh"
       - ".github/workflows/pi-skill-test.yml"
 
@@ -65,7 +71,7 @@ jobs:
       - name: Install Pi
         run: npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.83.0
 
-      - name: Run discovery Skill contract tests
+      - name: Run project Skill contract tests
         shell: bash
         run: bash scripts/ci/test-pi-skill.sh
 
