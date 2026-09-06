@@ -103,6 +103,7 @@ def resolve_route(
     candidate = gate.get("candidate")
     phase = gate.get("phase")
     decision = gate.get("decision")
+    fixture_only = gate.get("fixture_only", False)
 
     if not isinstance(framework, str) or not framework.strip():
         raise ValueError("gate.framework must be a non-empty string")
@@ -110,6 +111,8 @@ def resolve_route(
         raise ValueError("gate.candidate must be a non-empty string")
     if not isinstance(phase, str) or not isinstance(decision, str):
         raise ValueError("gate.phase and gate.decision must be strings")
+    if not isinstance(fixture_only, bool):
+        raise ValueError("gate.fixture_only must be a boolean when provided")
 
     key = resolve_framework_key(framework, frameworks, framework_families)
     framework_config = require_dict(frameworks[key], f"frameworks.{key}")
@@ -117,6 +120,7 @@ def resolve_route(
 
     result: dict[str, Any] = {
         "schema_version": 1,
+        "fixture_only": fixture_only,
         "framework": key,
         "candidate": candidate,
         "gate_phase": phase,
@@ -127,6 +131,15 @@ def resolve_route(
         "official_repository": skills.get("repository"),
         "reason": "",
     }
+
+    if fixture_only:
+        result.update(
+            {
+                "route_type": "BLOCKED_BY_GATE",
+                "reason": "fixture_only gate 仅用于回归覆盖，不解析或执行真实适配路由。",
+            }
+        )
+        return result
 
     # The route resolver cannot override qualification gating.
     if phase != PROCEED_PHASE or decision != PROCEED_DECISION:
