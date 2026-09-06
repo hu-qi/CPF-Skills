@@ -1,0 +1,14 @@
+{
+  "fixture_only": true,
+  "framework": "arkts",
+  "candidate": "ExampleLibrary",
+  "qualification": {
+    "status": "RECOMMENDED",
+    "eligible_to_start_adaptation": true,
+    "pending_checks": []
+  },
+  "evidence": [
+    "fixture://qualification/registry",
+    "fixture://qualification/dedup"
+  ]
+}
