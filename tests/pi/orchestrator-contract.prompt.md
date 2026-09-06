@@ -4,6 +4,8 @@
 
 - 不联网，不调用外部搜索；
 - 下列 qualification 都是测试夹具，视为已验证标准化输入；
+- 本夹具同时声明当前框架路由事实：`flutter-library-search` 已在当前 `resources/frameworks.yaml` 中确认存在，是 Flutter qualification 阶段的官方 Skill；
+- 本夹具未确认任何 Flutter “实际适配实现 Skill”存在；
 - 不重新执行 discovery，不补充夹具之外的事实；
 - 每个候选必须且只能输出一个结果；
 - `phase`、`decision`、`qualification_status` 必须使用 Skill 定义的规范英文 token；
@@ -33,13 +35,14 @@
    - qualification.status = `RECOMMENDED`
    - qualification.eligible_to_start_adaptation = true
    - qualification.pending_checks = []
-   - 当前夹具没有提供“实际适配 Skill 已确认存在”的信息
+   - 没有已确认的 Flutter 实际适配实现 Skill，因此 `route_skill = null`
 
 2. `NeedsCheckPlugin`
    - framework = flutter
    - qualification.status = `NEEDS_OFFICIAL_CHECK`
    - qualification.eligible_to_start_adaptation = false
    - qualification.pending_checks = [`执行 flutter-library-search 并重新生成 qualification`]
+   - `flutter-library-search` 已由本夹具明确确认存在，因此即使 decision=BLOCKED，`route_skill` 也必须为 `flutter-library-search`
 
 3. `ExistingPlugin`
    - framework = flutter
