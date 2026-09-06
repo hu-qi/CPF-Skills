@@ -427,6 +427,40 @@ fixture://...
 examples/e2e-fixture/README.md
 ```
 
+## Real-case evidence intake
+
+初始化真实案例工作区：
+
+```bash
+python3 scripts/evidence/init_real_case.py <framework> <candidate> <output-dir>
+```
+
+例如：
+
+```bash
+python3 scripts/evidence/init_real_case.py arkts some-real-library work/some-real-library
+```
+
+初始化结果故意保持阻塞：
+
+```text
+qualification.status = NEEDS_OFFICIAL_CHECK
+eligible_to_start_adaptation = false
+validation.* = MISSING
+external metrics = null
+manual confirmations = NOT_PROVIDED
+fixture_only = false
+```
+
+脚本还会：
+
+- 解析并规范 framework alias；
+- 拒绝 `applicationtpc` 这种未选择 `arkts` / `cpp` 的模糊 framework family；
+- 拒绝覆盖非空输出目录；
+- 生成 case 内 `README.md`，说明资格、Validation、开发记录和合规证据如何补齐。
+
+初始化本身不代表通过任何门禁。只有真实 evidence 补齐后，才能运行同一套 qualification / validation / article pipeline。
+
 ## CI / 测试分层
 
 ### Deterministic Tests
@@ -447,6 +481,8 @@ examples/e2e-fixture/README.md
 - full article compliance report；
 - article material pack；
 - fixture-only article pipeline E2E；
+- real-case evidence intake；
+- fixture evidence 防污染；
 - GitHub Actions Node 24 runtime guard。
 
 第一方 GitHub Actions 最低版本：
@@ -549,10 +585,12 @@ scripts/
 │   ├── resolve_framework_route.py
 │   ├── resolve_next_action.py
 │   └── resolve_validation_gate.py
-└── article/
-    ├── build_article_material_pack.py
-    ├── check_article_static.py
-    └── build_compliance_report.py
+├── article/
+│   ├── build_article_material_pack.py
+│   ├── check_article_static.py
+│   └── build_compliance_report.py
+└── evidence/
+    └── init_real_case.py
 
 examples/
 └── e2e-fixture/
@@ -567,7 +605,8 @@ tests/unit/
 ├── test_article_static_check.py
 ├── test_article_compliance_report.py
 ├── test_article_material_pack.py
-└── test_e2e_article_fixture.py
+├── test_e2e_article_fixture.py
+└── test_real_case_intake.py
 ```
 
 ## Roadmap
@@ -590,13 +629,13 @@ tests/unit/
 - [x] 5 个独立 Pi Skill contract matrix
 - [x] fixture-only article pipeline E2E
 - [x] fixture evidence 防污染保护
+- [x] real-case evidence intake initializer
 - [x] Node 24 GitHub Actions 迁移与静态版本守卫
 - [ ] 增加**真实适配完成**后的 validation/article-check 案例
-- [ ] 增加真实案例 evidence intake/template，降低接入成本
 - [ ] 如有分发需求，再增加 AtomCode Plugin/Marketplace 元数据
 
 ## 下一步
 
-当前架构链路和合成 E2E 已闭环，下一优先级不再是继续增加抽象 Skill，而是接入**一个真实适配案例**。
+当前架构、合成 E2E、模型 contract、证据防污染和真实案例接入入口都已闭环。下一优先级是接入**一个真实适配案例**，而不是继续增加抽象层。
 
-在没有真实 commit、构建日志、测试结果、HarmonyOS/OpenHarmony 实体设备运行和截图前，本仓库不会伪造“真实案例已完成”。下一阶段先提供 real-case evidence intake/template；一旦有真实适配项目，即可用同一套 deterministic gate、material pack 和 article compliance 流程做首个真实验收。
+在没有真实 commit、构建日志、测试结果、HarmonyOS/OpenHarmony 实体设备运行和截图前，本仓库不会伪造“真实案例已完成”。有真实项目后，先用 `scripts/evidence/init_real_case.py` 建立工作区，再用同一套 deterministic gate、material pack 和 article compliance 流程完成首个真实验收。
