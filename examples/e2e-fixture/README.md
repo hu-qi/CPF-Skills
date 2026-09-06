@@ -26,6 +26,31 @@ fixture://...
 - 不得把 fixture 的 `READY_TO_PUBLISH` 当作真实文章发布资格；
 - 真实案例必须使用可追溯到真实仓库、构建日志、测试报告、实体 HarmonyOS/OpenHarmony 设备和截图的证据。
 
+## `READY_TO_PUBLISH` 与 `publishable`
+
+本 fixture 会故意覆盖完整 compliance 的成功状态分支，因此测试结果允许：
+
+```text
+status = READY_TO_PUBLISH
+```
+
+但确定性 report 必须同时保持：
+
+```text
+fixture_only = true
+publishable = false
+```
+
+这里的 `READY_TO_PUBLISH` 只表示“这组测试数据覆盖到了成功状态机分支”，**不表示现实文章可发布**。
+
+只有真实输入满足全部规则时才允许：
+
+```text
+fixture_only = false
+status = READY_TO_PUBLISH
+publishable = true
+```
+
 ## 覆盖链路
 
 ```text
@@ -56,7 +81,9 @@ static report
       ↓
 build_compliance_report.py
       ↓
-READY_TO_PUBLISH（仅 fixture 状态）
+READY_TO_PUBLISH
+fixture_only = true
+publishable = false
 ```
 
 ## 回归测试
@@ -72,6 +99,9 @@ python3 tests/unit/test_e2e_article_fixture.py
 3. Article Material Pack 不产生缺口且禁止整篇 AI 生成；
 4. 文章静态检查通过；
 5. 完整合规报告能覆盖 `READY_TO_PUBLISH` 分支；
-6. `readership` 仍是 `POST_PUBLISH`，不阻塞发布前状态。
+6. fixture compliance 始终 `publishable=false`；
+7. `readership` 仍是 `POST_PUBLISH`，不阻塞发布前状态。
 
-这个 fixture 的目标只是验证“程序按契约工作”。当有真实适配项目可提供可审计证据时，应另建真实案例目录，而不是修改本 fixture 去伪装真实证据。
+真实模式中的 Validation、Article Material Pack 和 Compliance 都会拒绝 `fixture://` 引用，因此不能通过简单删除 fixture 标记来把本目录伪装成真实案例。
+
+这个 fixture 的目标只是验证“程序按契约工作”。当有真实适配项目可提供可审计证据时，应使用 `scripts/evidence/init_real_case.py` 建立独立真实案例工作区，而不是修改本 fixture 去伪装真实证据。
