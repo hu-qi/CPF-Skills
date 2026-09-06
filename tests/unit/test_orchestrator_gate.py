@@ -28,8 +28,11 @@ def fixture(
     *,
     eligible: bool,
     pending: list[str] | None = None,
+    fixture_only: bool = False,
+    evidence: list[str] | None = None,
 ) -> dict:
     return {
+        "fixture_only": fixture_only,
         "framework": "flutter",
         "candidate": "ExamplePlugin",
         "qualification": {
@@ -38,11 +41,13 @@ def fixture(
             "reason": "fixture",
             "pending_checks": pending or [],
         },
+        "evidence": evidence or [],
     }
 
 
 def test_recommended_proceeds() -> None:
     result = gate.resolve_gate(fixture("RECOMMENDED", eligible=True))
+    assert result["fixture_only"] is False
     assert result["phase"] == "ADAPTATION"
     assert result["decision"] == "PROCEED"
 
@@ -96,13 +101,54 @@ def test_invalid_artifact_is_rejected() -> None:
         raise AssertionError("invalid status must be rejected")
 
 
+def test_fixture_evidence_requires_explicit_fixture_mode() -> None:
+    try:
+        gate.resolve_gate(
+            fixture(
+                "RECOMMENDED",
+                eligible=True,
+                evidence=["fixture://qualification/dedup"],
+            )
+        )
+    except ValueError as exc:
+        assert "fixture:// evidence is test-only" in str(exc)
+    else:
+        raise AssertionError("real qualification must reject fixture evidence")
+
+    result = gate.resolve_gate(
+        fixture(
+            "RECOMMENDED",
+            eligible=True,
+            fixture_only=True,
+            evidence=["fixture://qualification/dedup"],
+        )
+    )
+    assert result["fixture_only"] is True
+    assert result["phase"] == "ADAPTATION"
+    assert result["decision"] == "PROCEED"
+    assert "测试夹具" in result["next_action"]
+
+
+def test_fixture_only_must_be_boolean() -> None:
+    bad = fixture("RECOMMENDED", eligible=True)
+    bad["fixture_only"] = "false"
+    try:
+        gate.resolve_gate(bad)
+    except ValueError as exc:
+        assert "fixture_only must be a boolean" in str(exc)
+    else:
+        raise AssertionError("non-boolean fixture_only must be rejected")
+
+
 def main() -> None:
     test_recommended_proceeds()
     test_recommended_contract_conflict_blocks()
     test_needs_official_check_blocks()
     test_exclusions_stop()
     test_invalid_artifact_is_rejected()
-    print("ORCHESTRATOR GATE TESTS PASSED: deterministic qualification gating is stable")
+    test_fixture_evidence_requires_explicit_fixture_mode()
+    test_fixture_only_must_be_boolean()
+    print("ORCHESTRATOR GATE TESTS PASSED: deterministic qualification gating and fixture isolation are stable")
 
 
 if __name__ == "__main__":
