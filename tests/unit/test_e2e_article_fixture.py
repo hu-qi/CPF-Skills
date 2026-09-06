@@ -69,6 +69,7 @@ def test_fixture_cli_chain() -> None:
             validation_gate,
         )
         gate = load_json(validation_gate)
+        assert gate["fixture_only"] is True
         assert gate["phase"] == "ARTICLE_PREP"
         assert gate["decision"] == "PROCEED"
         assert gate["pending_checks"] == []
@@ -81,6 +82,7 @@ def test_fixture_cli_chain() -> None:
             material_pack,
         )
         pack = load_json(material_pack)
+        assert pack["fixture_only"] is True
         assert pack["qualification_status"] == "RECOMMENDED"
         assert pack["validation_status"] == "ARTICLE_PREP/PROCEED"
         assert pack["material_gaps"] == []
@@ -107,11 +109,14 @@ def test_fixture_cli_chain() -> None:
             compliance_report,
         )
         compliance = load_json(compliance_report)
+        assert compliance["fixture_only"] is True
         assert compliance["status"] == "READY_TO_PUBLISH"
+        assert compliance["publishable"] is False
         assert compliance["blocking_rules"] == []
         assert compliance["manual_rules"] == []
         assert compliance["external_rules"] == []
         assert compliance["post_publish_rules"] == ["readership"]
+        assert any("不得作为真实文章发布资格" in item for item in compliance["next_actions"])
 
 
 def main() -> None:
