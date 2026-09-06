@@ -1,0 +1,40 @@
+{
+  "fixture_only": true,
+  "external_metrics": {
+    "duplication_rate_percent": 12,
+    "csdn_quality_score": 95,
+    "readership": 20
+  },
+  "confirmations": {
+    "version-latest-primary": {
+      "status": "CONFIRMED",
+      "evidence": ["fixture://confirmation/version"],
+      "reason": "Fixture confirmation only."
+    },
+    "practical-instructive-factual": {
+      "status": "CONFIRMED",
+      "evidence": ["fixture://confirmation/practical"],
+      "reason": "Fixture confirmation only."
+    },
+    "original-content": {
+      "status": "CONFIRMED",
+      "evidence": ["fixture://confirmation/original"],
+      "reason": "Fixture confirmation only."
+    },
+    "real-development-history": {
+      "status": "CONFIRMED",
+      "evidence": ["fixture://confirmation/history"],
+      "reason": "Fixture confirmation only."
+    },
+    "ai-not-majority-author": {
+      "status": "CONFIRMED",
+      "evidence": ["fixture://confirmation/ai-boundary"],
+      "reason": "Fixture confirmation only."
+    },
+    "atomgit-brand": {
+      "status": "CONFIRMED",
+      "evidence": ["fixture://confirmation/brand"],
+      "reason": "Fixture confirmation only."
+    }
+  }
+}
