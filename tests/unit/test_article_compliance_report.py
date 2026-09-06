@@ -183,6 +183,19 @@ def test_fixture_mode_mismatch_is_rejected() -> None:
         raise AssertionError("fixture mode mismatch must be rejected")
 
 
+def test_real_compliance_rejects_fixture_confirmation_evidence() -> None:
+    context = confirmed_context()
+    context["confirmations"]["original-content"]["evidence"] = [
+        "fixture://confirmation/original-content"
+    ]
+    try:
+        build(context=context)
+    except ValueError as exc:
+        assert "fixture:// evidence is test-only" in str(exc)
+    else:
+        raise AssertionError("real compliance report must reject fixture confirmation evidence")
+
+
 def main() -> None:
     test_fully_confirmed_pre_publish_rules_are_ready()
     test_missing_external_metrics_block()
@@ -192,6 +205,7 @@ def main() -> None:
     test_low_readership_never_blocks_pre_publish()
     test_fixture_report_can_cover_ready_branch_but_is_never_publishable()
     test_fixture_mode_mismatch_is_rejected()
+    test_real_compliance_rejects_fixture_confirmation_evidence()
     print("ARTICLE COMPLIANCE TESTS PASSED: full pre-publish status is deterministic")
 
 
