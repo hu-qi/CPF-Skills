@@ -30,6 +30,13 @@ def require_string_list(value: Any, name: str) -> list[str]:
     return list(value)
 
 
+def require_fixture_flag(payload: dict[str, Any], name: str) -> bool:
+    value = payload.get("fixture_only", False)
+    if not isinstance(value, bool):
+        raise ValueError(f"{name}.fixture_only must be a boolean when provided")
+    return value
+
+
 def validation_evidence(validation_gate: dict[str, Any]) -> dict[str, list[str]]:
     if validation_gate.get("phase") != "ARTICLE_PREP" or validation_gate.get("decision") != "PROCEED":
         raise ValueError("validation gate must be ARTICLE_PREP/PROCEED before building article materials")
@@ -64,6 +71,15 @@ def build_material_pack(
         raise ValueError("qualification and validation gate framework mismatch")
     if validation_gate.get("candidate") != candidate:
         raise ValueError("qualification and validation gate candidate mismatch")
+
+    fixture_flags = {
+        require_fixture_flag(qualification, "qualification"),
+        require_fixture_flag(validation_gate, "validation_gate"),
+        require_fixture_flag(development_notes, "development_notes"),
+    }
+    if len(fixture_flags) != 1:
+        raise ValueError("qualification, validation gate and development notes fixture_only flags must match")
+    fixture_only = fixture_flags.pop()
 
     qualification_body = require_dict(qualification.get("qualification"), "qualification.qualification")
     if qualification_body.get("status") != "RECOMMENDED":
@@ -151,6 +167,7 @@ def build_material_pack(
 
     return {
         "schema_version": 1,
+        "fixture_only": fixture_only,
         "framework": framework,
         "candidate": candidate,
         "qualification_status": qualification_body.get("status"),
