@@ -27,6 +27,8 @@ frameworks:
       repository: https://atomgit.com/CPF-Flutter/skills
       library_search: flutter-library-search
       adaptation_necessity_check: ohos-flutter-plugin-adaptation-necessity-check
+      # 当前已审计能力用于搜索/必要性判断；未确认独立实际移植实现 Skill。
+      adaptation_implementation: null
     community:
       name: CPF-Flutter 鸿蒙社区
       organization: https://atomgit.com/CPF-Flutter
@@ -80,7 +82,21 @@ frameworks:
         required: true
     official_skills:
       repository: https://atomgit.com/CPF-ApplicationTPC/skills
-      # 具体 Skill 名称在完成官方仓库能力审计后补充。
+      audit_status: audited
+      audit_commit: 08938711a65ddf92ead2fbe97315ecb458876d8a
+      # 2026-09-06 官方 HEAD 审计确认：先做迁移分析，再由 porting Skill 实际生成 ArkTS/ETS + HAR。
+      migration_analyzer: ohos-library-migration-analyzer
+      adaptation_implementation: ohos-library-porting
+      interface_analyzer: library-interface-analyzer
+      spec_analyzer: ohos-library-spec-analyzer
+      code_check: ohos-code-check
+      library_check: ohos-library-check
+      unit_test: ohos-library-unit-test
+      demo_scenario: ohos-demo-scenario-generator
+      demo_gen: ohos-demo-code-generator
+      demo_doc: ohos-arkts-demo-doc-generator
+      xts_gen: ohos-xts-code-generator
+      xts_doc: ohos-xts-doc-generator
     community:
       name: CPF-ApplicationTPC 原生库社区
       organization: https://atomgit.com/CPF-ApplicationTPC
@@ -100,6 +116,12 @@ frameworks:
         required: true
     official_skills:
       repository: https://atomgit.com/CPF-ApplicationTPC/skills
+      audit_status: audited
+      audit_commit: 08938711a65ddf92ead2fbe97315ecb458876d8a
+      # migration-analyzer 明确覆盖 C/C++ 项目的依赖、guard、CMake/NDK 与 .so 迁移分析。
+      migration_analyzer: ohos-library-migration-analyzer
+      # ohos-library-porting 当前主实现流程面向 ArkTS/ETS + HAR；没有足够证据证明其为完整 C/C++ NDK 实现 Skill。
+      adaptation_implementation: null
     community:
       name: CPF-ApplicationTPC 原生库社区
       organization: https://atomgit.com/CPF-ApplicationTPC
