@@ -59,6 +59,13 @@ def require_list(value: Any, name: str) -> list[Any]:
     return value
 
 
+def require_fixture_flag(payload: dict[str, Any], name: str) -> bool:
+    value = payload.get("fixture_only", False)
+    if not isinstance(value, bool):
+        raise ValueError(f"{name}.fixture_only must be a boolean when provided")
+    return value
+
+
 def load_rules(path: Path) -> dict[str, Any]:
     return require_dict(yaml.safe_load(path.read_text(encoding="utf-8")), "article rules")
 
@@ -242,6 +249,12 @@ def build_report(
     if validation_gate.get("framework") != framework:
         raise ValueError("static report and validation gate framework mismatch")
 
+    validation_fixture_only = require_fixture_flag(validation_gate, "validation_gate")
+    context_fixture_only = require_fixture_flag(context, "context")
+    if validation_fixture_only != context_fixture_only:
+        raise ValueError("validation gate and compliance context fixture_only flags must match")
+    fixture_only = validation_fixture_only
+
     rules = collect_rules(rules_config)
     checks: list[dict[str, Any]] = []
 
@@ -259,7 +272,6 @@ def build_report(
 
     checks.append(check_post_publish("readership", rules["readership"], context))
 
-    # Recommendation/exception rules are reported without becoming hidden blockers.
     checks.append(
         make_check(
             "version-harmony-fallback",
@@ -294,16 +306,25 @@ def build_report(
     else:
         status = "READY_TO_PUBLISH"
 
-    next_actions: list[str] = []
-    if blocking_rules:
-        next_actions.append("修复所有 FAIL，并补齐所有 EXTERNAL_REQUIRED 的真实外部结果。")
-    if manual_rules:
-        next_actions.append("完成 MANUAL_REQUIRED 项的作者/人工确认并保存证据。")
-    if not next_actions:
-        next_actions.append("发布前硬规则已完成；发布后继续跟踪 readership 指标。")
+    publishable = status == "READY_TO_PUBLISH" and not fixture_only
+
+    if fixture_only:
+        next_actions = [
+            "当前报告来自 fixture_only 测试数据，仅用于回归验证；不得作为真实文章发布资格或活动证据。"
+        ]
+    else:
+        next_actions: list[str] = []
+        if blocking_rules:
+            next_actions.append("修复所有 FAIL，并补齐所有 EXTERNAL_REQUIRED 的真实外部结果。")
+        if manual_rules:
+            next_actions.append("完成 MANUAL_REQUIRED 项的作者/人工确认并保存证据。")
+        if not next_actions:
+            next_actions.append("发布前硬规则已完成；发布后继续跟踪 readership 指标。")
 
     return {
         "schema_version": 1,
+        "fixture_only": fixture_only,
+        "publishable": publishable,
         "framework": framework,
         "status": status,
         "blocking_rules": blocking_rules,
@@ -344,7 +365,8 @@ def main() -> None:
     )
     print(
         f"Article compliance: {report['framework']} -> {report['status']} "
-        f"(blocking={len(report['blocking_rules'])}, manual={len(report['manual_rules'])})"
+        f"(blocking={len(report['blocking_rules'])}, manual={len(report['manual_rules'])}, "
+        f"publishable={str(report['publishable']).lower()})"
     )
 
 
