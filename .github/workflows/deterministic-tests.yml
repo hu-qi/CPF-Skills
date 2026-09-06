@@ -12,7 +12,8 @@ on:
       - "tests/pi/live/normalize_official_flutter_result.py"
       - "scripts/qualification/**"
       - "scripts/orchestrator/**"
-      - ".github/workflows/deterministic-tests.yml"
+      - "scripts/ci/check-github-actions-runtime.py"
+      - ".github/workflows/**"
   pull_request:
     paths:
       - "tests/unit/**"
@@ -22,7 +23,8 @@ on:
       - "tests/pi/live/normalize_official_flutter_result.py"
       - "scripts/qualification/**"
       - "scripts/orchestrator/**"
-      - ".github/workflows/deterministic-tests.yml"
+      - "scripts/ci/check-github-actions-runtime.py"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -41,6 +43,9 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+
+      - name: Check GitHub Actions Node 24 runtime compatibility
+        run: python3 scripts/ci/check-github-actions-runtime.py
 
       - name: Run deterministic discovery regressions
         run: python3 tests/unit/test_discovery_helpers.py
