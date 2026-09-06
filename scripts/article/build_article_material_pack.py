@@ -15,6 +15,8 @@ REQUIRED_VALIDATION_CHECKS = (
     "screenshots",
 )
 
+FIXTURE_EVIDENCE_PREFIX = "fixture://"
+
 
 def require_dict(value: Any, name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
@@ -35,6 +37,20 @@ def require_fixture_flag(payload: dict[str, Any], name: str) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{name}.fixture_only must be a boolean when provided")
     return value
+
+
+def find_fixture_refs(value: Any) -> list[str]:
+    refs: list[str] = []
+    if isinstance(value, str):
+        if value.startswith(FIXTURE_EVIDENCE_PREFIX):
+            refs.append(value)
+    elif isinstance(value, list):
+        for item in value:
+            refs.extend(find_fixture_refs(item))
+    elif isinstance(value, dict):
+        for item in value.values():
+            refs.extend(find_fixture_refs(item))
+    return refs
 
 
 def validation_evidence(validation_gate: dict[str, Any]) -> dict[str, list[str]]:
@@ -80,6 +96,17 @@ def build_material_pack(
     if len(fixture_flags) != 1:
         raise ValueError("qualification, validation gate and development notes fixture_only flags must match")
     fixture_only = fixture_flags.pop()
+
+    if not fixture_only:
+        fixture_refs = [
+            *find_fixture_refs(qualification),
+            *find_fixture_refs(validation_gate),
+            *find_fixture_refs(development_notes),
+        ]
+        if fixture_refs:
+            raise ValueError(
+                "fixture:// evidence is test-only and cannot be used in real article materials"
+            )
 
     qualification_body = require_dict(qualification.get("qualification"), "qualification.qualification")
     if qualification_body.get("status") != "RECOMMENDED":
