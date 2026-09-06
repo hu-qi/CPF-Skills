@@ -23,6 +23,7 @@ ALLOWED_CHECK_STATUSES = {
 }
 
 PHYSICAL_DEVICE_PLATFORMS = {"HarmonyOS", "OpenHarmony"}
+FIXTURE_EVIDENCE_PREFIX = "fixture://"
 
 
 def require_dict(value: Any, name: str) -> dict[str, Any]:
@@ -94,6 +95,10 @@ def resolve_validation_gate(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(candidate, str) or not candidate.strip():
         raise ValueError("candidate must be a non-empty string")
 
+    fixture_only = payload.get("fixture_only", False)
+    if not isinstance(fixture_only, bool):
+        raise ValueError("fixture_only must be a boolean when provided")
+
     validation = require_dict(payload.get("validation"), "validation")
     checks = require_dict(validation.get("checks"), "validation.checks")
 
@@ -106,6 +111,17 @@ def resolve_validation_gate(payload: dict[str, Any]) -> dict[str, Any]:
     unknown = sorted(set(checks) - set(REQUIRED_CHECKS))
     if unknown:
         raise ValueError("unsupported validation checks: " + ", ".join(unknown))
+
+    fixture_refs = [
+        ref
+        for check in normalized_checks.values()
+        for ref in check["evidence"]
+        if ref.startswith(FIXTURE_EVIDENCE_PREFIX)
+    ]
+    if fixture_refs and not fixture_only:
+        raise ValueError(
+            "fixture:// evidence is test-only; set fixture_only=true only for explicit regression fixtures"
+        )
 
     failed = [
         name
@@ -136,6 +152,7 @@ def resolve_validation_gate(payload: dict[str, Any]) -> dict[str, Any]:
             reason_parts.append("incomplete=" + ",".join(incomplete))
         return {
             "schema_version": 1,
+            "fixture_only": fixture_only,
             "framework": framework,
             "candidate": candidate,
             "phase": "VALIDATION",
@@ -149,6 +166,7 @@ def resolve_validation_gate(payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "schema_version": 1,
+        "fixture_only": fixture_only,
         "framework": framework,
         "candidate": candidate,
         "phase": "ARTICLE_PREP",
