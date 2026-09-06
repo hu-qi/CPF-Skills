@@ -52,7 +52,15 @@ frameworks:
         required: true
     official_skills:
       repository: https://atomgit.com/CPF-RN/skills
-      # 具体 Skill 名称在完成官方仓库能力审计后补充，避免凭记忆硬编码。
+      audit_status: audited
+      # 2026-09-06 对官方仓当前 HEAD 的 CI 审计确认以下业务能力存在。
+      interface_analyzer: rnoh-lib-interface-analyzer
+      code_check: rnoh-lib-code-check
+      demo_doc: rnoh-lib-demo-doc
+      demo_gen: rnoh-lib-demo-gen
+      xts_gen: rnoh-lib-xts-gen
+      # 当前审计未发现独立的 porting/migration 实际移植 Skill。
+      adaptation_implementation: null
     community:
       name: CPF-RN 鸿蒙社区
       organization: https://atomgit.com/CPF-RN
