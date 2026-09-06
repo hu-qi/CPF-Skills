@@ -6,6 +6,7 @@
 - 下列内容是离线测试夹具，但每个 case 的 `fixture_only` 字段模拟真实业务语义；
 - 不自行补充夹具之外的事实；
 - 不把缺失的外部指标或人工确认项乐观判为 PASS；
+- 每个明确列出的人工项独立判定，不能因为“其他人工项已通过”而继承 PASS；
 - 阅读量属于 POST_PUBLISH，不得阻塞发布前状态；
 - `status=READY_TO_PUBLISH` 不等于一定 `publishable=true`；fixture case 必须保持不可现实发布；
 - 每个 case 必须且只能输出一个结果；
@@ -41,12 +42,12 @@
    - static checker = PASS
    - gitcode-forbidden = PASS
    - Validation Gate = `ARTICLE_PREP/PROCEED`
-   - duplication_rate_percent = 未提供
-   - csdn_quality_score = 未提供
-   - original-content = 未提供人工确认
-   - ai-not-majority-author = 未提供人工确认
-   - readership = 20
-   - 其他发布前人工项视为已确认通过
+   - duplication_rate_percent = 未提供 → 必须 `EXTERNAL_REQUIRED`
+   - csdn_quality_score = 未提供 → 必须 `EXTERNAL_REQUIRED`
+   - original-content = **明确未提供人工确认** → 必须 `MANUAL_REQUIRED`
+   - ai-not-majority-author = **明确未提供人工确认** → 必须 `MANUAL_REQUIRED`
+   - readership = 20 → 仍为 `POST_PUBLISH`
+   - 除 `original-content` 和 `ai-not-majority-author` 之外的其他发布前人工项视为已确认通过；这一句绝不覆盖前面两个明确缺失项
    - 预期：`BLOCKED` 且 `publishable=false`
 
 2. `ReadyArticle`
