@@ -23,10 +23,10 @@ validation_gate = load_module(
 )
 
 
-def verified_check(name: str) -> dict:
+def verified_check(name: str, *, prefix: str = "artifact://") -> dict:
     check = {
         "status": "VERIFIED",
-        "evidence": [f"artifact://{name}"],
+        "evidence": [f"{prefix}{name}"],
     }
     if name == "device_run":
         check["details"] = {
@@ -55,6 +55,7 @@ def test_all_verified_enters_article_prep() -> None:
     assert result["phase"] == "ARTICLE_PREP"
     assert result["decision"] == "PROCEED"
     assert result["pending_checks"] == []
+    assert result["fixture_only"] is False
     assert len(result["evidence"]) == len(validation_gate.REQUIRED_CHECKS)
 
 
@@ -134,6 +135,23 @@ def test_unknown_check_is_rejected() -> None:
         raise AssertionError("unknown checks must be rejected")
 
 
+def test_fixture_evidence_requires_explicit_fixture_mode() -> None:
+    payload = artifact()
+    for name in validation_gate.REQUIRED_CHECKS:
+        payload["validation"]["checks"][name] = verified_check(name, prefix="fixture://")
+    try:
+        validation_gate.resolve_validation_gate(payload)
+    except ValueError as exc:
+        assert "fixture:// evidence is test-only" in str(exc)
+    else:
+        raise AssertionError("fixture evidence must not enter a normal validation artifact")
+
+    payload["fixture_only"] = True
+    result = validation_gate.resolve_validation_gate(payload)
+    assert result["fixture_only"] is True
+    assert result["phase"] == "ARTICLE_PREP"
+
+
 def main() -> None:
     test_all_verified_enters_article_prep()
     test_failed_and_missing_checks_block()
@@ -141,6 +159,7 @@ def main() -> None:
     test_device_run_must_be_physical_harmony_device()
     test_missing_required_check_is_rejected()
     test_unknown_check_is_rejected()
+    test_fixture_evidence_requires_explicit_fixture_mode()
     print("VALIDATION GATE TESTS PASSED: article prep requires complete physical-device evidence")
 
 
