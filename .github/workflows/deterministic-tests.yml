@@ -76,3 +76,6 @@ jobs:
 
       - name: Run deterministic article static checker regressions
         run: python3 tests/unit/test_article_static_check.py
+
+      - name: Run full article compliance aggregation regressions
+        run: python3 tests/unit/test_article_compliance_report.py
