@@ -24,8 +24,9 @@ route = load_module(
 frameworks, framework_families = route.load_framework_config(ROOT / "resources/frameworks.yaml")
 
 
-def gate_fixture(framework: str) -> dict:
+def gate_fixture(framework: str, *, fixture_only: bool = False) -> dict:
     return {
+        "fixture_only": fixture_only,
         "framework": framework,
         "candidate": "ExampleLibrary",
         "phase": "ADAPTATION",
@@ -44,6 +45,7 @@ def resolve(framework: str) -> dict:
 def test_applicationtpc_arkts_routes_to_official_porting() -> None:
     for framework in ("arkts", "applicationtpc-arkts"):
         result = resolve(framework)
+        assert result["fixture_only"] is False
         assert result["framework"] == "arkts"
         assert result["route_type"] == "OFFICIAL_SKILL"
         assert result["route_skill"] == "ohos-library-porting"
@@ -86,6 +88,18 @@ def test_blocked_gate_cannot_reach_official_porting() -> None:
     assert result["analysis_skill"] is None
 
 
+def test_fixture_gate_is_non_operational_even_when_state_is_proceed() -> None:
+    fixture_gate = gate_fixture("arkts", fixture_only=True)
+    result = route.resolve_route(fixture_gate, frameworks, framework_families)
+    assert result["fixture_only"] is True
+    assert result["gate_phase"] == "ADAPTATION"
+    assert result["gate_decision"] == "PROCEED"
+    assert result["route_type"] == "BLOCKED_BY_GATE"
+    assert result["route_skill"] is None
+    assert result["analysis_skill"] is None
+    assert "fixture_only" in result["reason"]
+
+
 def test_duplicate_framework_alias_is_rejected() -> None:
     duplicated = {
         "first": {"aliases": ["shared"]},
@@ -104,8 +118,9 @@ def main() -> None:
     test_applicationtpc_cpp_routes_to_analysis_then_manual_implementation()
     test_generic_applicationtpc_requires_explicit_variant()
     test_blocked_gate_cannot_reach_official_porting()
+    test_fixture_gate_is_non_operational_even_when_state_is_proceed()
     test_duplicate_framework_alias_is_rejected()
-    print("FRAMEWORK ROUTE TESTS PASSED: ApplicationTPC ArkTS/C++ routing is explicit")
+    print("FRAMEWORK ROUTE TESTS PASSED: real routes are explicit and fixture routes are non-operational")
 
 
 if __name__ == "__main__":
