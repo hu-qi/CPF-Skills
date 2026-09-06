@@ -34,19 +34,21 @@ PY
 
 run_contract() {
   local name="$1"
-  local prompt_file="$2"
-  local assert_script="$3"
+  local skill_name="$2"
+  local skill_path="$3"
+  local prompt_file="$4"
+  local assert_script="$5"
   local output_file=".artifacts/pi/${name}-${PI_MODEL}.md"
   local case_prompt
   case_prompt="$(cat "$prompt_file")"
 
-  local prompt="/skill:thirdparty-library-discovery ${case_prompt}"
+  local prompt="/skill:${skill_name} ${case_prompt}"
 
   pi \
     --provider agnes-cn \
     --model "$PI_MODEL" \
     --no-session \
-    --skill .atomcode/skills/thirdparty-library-discovery/SKILL.md \
+    --skill "$skill_path" \
     -p "$prompt" \
     | tee "$output_file"
 
@@ -55,10 +57,21 @@ run_contract() {
 
 run_contract \
   "discovery-contract" \
+  "thirdparty-library-discovery" \
+  ".atomcode/skills/thirdparty-library-discovery/SKILL.md" \
   "tests/pi/discovery-contract.prompt.md" \
   "tests/pi/assert_discovery_contract.py"
 
 run_contract \
   "official-handoff-contract" \
+  "thirdparty-library-discovery" \
+  ".atomcode/skills/thirdparty-library-discovery/SKILL.md" \
   "tests/pi/official-handoff-contract.prompt.md" \
   "tests/pi/assert_official_handoff_contract.py"
+
+run_contract \
+  "orchestrator-contract" \
+  "harmony-contribution-orchestrator" \
+  ".atomcode/skills/harmony-contribution-orchestrator/SKILL.md" \
+  "tests/pi/orchestrator-contract.prompt.md" \
+  "tests/pi/assert_orchestrator_contract.py"
