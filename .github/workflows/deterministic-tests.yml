@@ -12,6 +12,7 @@ on:
       - "tests/pi/live/normalize_official_flutter_result.py"
       - "scripts/qualification/**"
       - "scripts/orchestrator/**"
+      - "scripts/article/**"
       - "scripts/ci/check-github-actions-runtime.py"
       - "resources/frameworks.yaml"
       - "resources/article-rules.yaml"
@@ -25,6 +26,7 @@ on:
       - "tests/pi/live/normalize_official_flutter_result.py"
       - "scripts/qualification/**"
       - "scripts/orchestrator/**"
+      - "scripts/article/**"
       - "scripts/ci/check-github-actions-runtime.py"
       - "resources/frameworks.yaml"
       - "resources/article-rules.yaml"
@@ -71,3 +73,6 @@ jobs:
 
       - name: Run structured article rule regressions
         run: python3 tests/unit/test_article_rules.py
+
+      - name: Run deterministic article static checker regressions
+        run: python3 tests/unit/test_article_static_check.py
