@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Audit CPF-RN official Skills
         shell: bash
@@ -31,7 +31,7 @@ jobs:
 
       - name: Upload CPF-RN Skill audit
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cpf-rn-official-skills-audit
           path: .artifacts/official-skills/cpf-rn/
