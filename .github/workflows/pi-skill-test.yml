@@ -9,6 +9,7 @@ on:
       - ".atomcode/skills/thirdparty-library-discovery/**"
       - ".atomcode/skills/harmony-contribution-orchestrator/**"
       - ".atomcode/skills/harmony-article-check/**"
+      - ".atomcode/skills/harmony-article-writing/**"
       - "resources/frameworks.yaml"
       - "resources/article-rules.yaml"
       - "tests/pi/discovery-contract.prompt.md"
@@ -19,6 +20,8 @@ on:
       - "tests/pi/assert_orchestrator_contract.py"
       - "tests/pi/article-check-contract.prompt.md"
       - "tests/pi/assert_article_check_contract.py"
+      - "tests/pi/article-writing-contract.prompt.md"
+      - "tests/pi/assert_article_writing_contract.py"
       - "scripts/ci/test-pi-skill.sh"
       - ".github/workflows/pi-skill-test.yml"
   pull_request:
@@ -26,6 +29,7 @@ on:
       - ".atomcode/skills/thirdparty-library-discovery/**"
       - ".atomcode/skills/harmony-contribution-orchestrator/**"
       - ".atomcode/skills/harmony-article-check/**"
+      - ".atomcode/skills/harmony-article-writing/**"
       - "resources/frameworks.yaml"
       - "resources/article-rules.yaml"
       - "tests/pi/discovery-contract.prompt.md"
@@ -36,6 +40,8 @@ on:
       - "tests/pi/assert_orchestrator_contract.py"
       - "tests/pi/article-check-contract.prompt.md"
       - "tests/pi/assert_article_check_contract.py"
+      - "tests/pi/article-writing-contract.prompt.md"
+      - "tests/pi/assert_article_writing_contract.py"
       - "scripts/ci/test-pi-skill.sh"
       - ".github/workflows/pi-skill-test.yml"
 
@@ -47,17 +53,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  discovery-contract:
+  contract:
     # GitHub does not expose repository secrets to forked pull requests.
-    # Skip those runs instead of producing a misleading authentication failure.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
+
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - id: discovery
+            skill_name: thirdparty-library-discovery
+            skill_path: .atomcode/skills/thirdparty-library-discovery/SKILL.md
+            prompt_file: tests/pi/discovery-contract.prompt.md
+            assert_script: tests/pi/assert_discovery_contract.py
+          - id: official-handoff
+            skill_name: thirdparty-library-discovery
+            skill_path: .atomcode/skills/thirdparty-library-discovery/SKILL.md
+            prompt_file: tests/pi/official-handoff-contract.prompt.md
+            assert_script: tests/pi/assert_official_handoff_contract.py
+          - id: orchestrator
+            skill_name: harmony-contribution-orchestrator
+            skill_path: .atomcode/skills/harmony-contribution-orchestrator/SKILL.md
+            prompt_file: tests/pi/orchestrator-contract.prompt.md
+            assert_script: tests/pi/assert_orchestrator_contract.py
+          - id: article-check
+            skill_name: harmony-article-check
+            skill_path: .atomcode/skills/harmony-article-check/SKILL.md
+            prompt_file: tests/pi/article-check-contract.prompt.md
+            assert_script: tests/pi/assert_article_check_contract.py
+          - id: article-writing
+            skill_name: harmony-article-writing
+            skill_path: .atomcode/skills/harmony-article-writing/SKILL.md
+            prompt_file: tests/pi/article-writing-contract.prompt.md
+            assert_script: tests/pi/assert_article_writing_contract.py
+
+    name: contract-${{ matrix.id }}
 
     env:
       AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
       AGNES_BASE_URL: https://api.agnes-ai.cn/v1
       PI_MODEL: agnes-2.5-flash
+      PI_CONTRACT_TIMEOUT_SECONDS: "180"
 
     steps:
       - name: Checkout
@@ -79,14 +118,20 @@ jobs:
       - name: Install Pi
         run: npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.83.0
 
-      - name: Run project Skill contract tests
+      - name: Run ${{ matrix.id }} contract
         shell: bash
-        run: bash scripts/ci/test-pi-skill.sh
+        run: >-
+          bash scripts/ci/test-pi-skill.sh
+          "${{ matrix.id }}"
+          "${{ matrix.skill_name }}"
+          "${{ matrix.skill_path }}"
+          "${{ matrix.prompt_file }}"
+          "${{ matrix.assert_script }}"
 
       - name: Upload Pi output
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: pi-agnes-2.5-flash-output
+          name: pi-${{ matrix.id }}-agnes-2.5-flash-output
           path: .artifacts/pi/
           if-no-files-found: ignore
