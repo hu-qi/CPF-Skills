@@ -160,6 +160,15 @@ Flutter 当前 qualification 结构由仓库内确定性构建器生成，核心
 
 框架资源与官方 Skill 名称读取 `resources/frameworks.yaml`，不要在本 Skill 中复制易变化版本或仓库事实。
 
+进入 `ADAPTATION` 时，优先使用仓库内确定性路由：
+
+```text
+scripts/orchestrator/resolve_framework_route.py
+scripts/orchestrator/resolve_next_action.py
+```
+
+确定性 resolver 的结果高于模型临场猜测；如果 resolver 返回 `MANUAL_REQUIRED`，不得自行创造一个不存在的官方实现 Skill。
+
 ### Flutter
 
 当前已验证的候选资格相关官方 Skills：
@@ -178,6 +187,8 @@ Flutter 当前 qualification 结构由仓库内确定性构建器生成，核心
 
 读取 `resources/frameworks.yaml` 的 `official_skills`。配置或官方仓库尚未审计完整时，保持 `BLOCKED` 或说明能力边界，不自行创造 Skill 名称。
 
+对于存在多个技术栈的 framework family（例如 ApplicationTPC），必须使用明确 variant；不得把模糊 family 名称静默映射到某个实现技术栈。
+
 ## 适配后的阶段门禁
 
 qualification 只解决“是否值得开始”，不证明“适配已经完成”。
@@ -193,24 +204,69 @@ qualification 只解决“是否值得开始”，不证明“适配已经完成
 
 ## Validation 门禁
 
-进入 `ARTICLE_PREP` 前，至少检查：
+进入 Validation 阶段后，**不得仅凭自然语言描述判断是否可以写文章**。
 
+优先读取：
+
+```text
+references/validation-artifact.md
+```
+
+并使用仓库内确定性门禁：
+
+```text
+scripts/orchestrator/resolve_validation_gate.py
+```
+
+Validation Artifact 必须包含以下 6 个 required checks：
+
+- `implementation`
+- `build`
+- `demo`
+- `tests`
+- `device_run`
+- `screenshots`
+
+每项只允许以下状态 token：
+
+```text
+VERIFIED
+FAILED
+NOT_RUN
+MISSING
+```
+
+其中：
+
+- `VERIFIED` 必须附带至少一个真实 evidence 引用；
+- `device_run=VERIFIED` 必须明确 `device_kind=physical`；
+- `device_run=VERIFIED` 的 `platform` 必须是 `HarmonyOS` 或 `OpenHarmony`；
+- 模拟器、预览器或 Android/iOS 设备不能满足真机运行门禁；
+- 任一检查 `FAILED` / `NOT_RUN` / `MISSING` 时，保持 `VALIDATION/BLOCKED`；
+- 只有六项全部满足确定性契约时，才能得到 `ARTICLE_PREP/PROCEED`。
+
+因此，进入 `ARTICLE_PREP` 前至少要有：
+
+- 真实实现证据；
 - 编译/构建成功证据；
 - Demo 或最小使用场景；
 - 关键功能测试结果；
-- HarmonyOS / OpenHarmony 真机成功运行证据；
+- HarmonyOS / OpenHarmony 实体设备成功运行证据；
 - 可用于文章的真实运行截图；
 - 关键问题与解决过程来自实际记录，而不是事后编造。
 
-缺任一活动硬性证据时：
-
-- `phase = VALIDATION`
-- `decision = BLOCKED`
-- 把缺项列入 `pending_checks`。
+Validation Gate 的机器输出是阶段推进的事实依据。模型不能因为“证据看起来差不多齐了”而覆盖 `BLOCKED`。
 
 ## Article Prep
 
-技术验证通过后才进入 `ARTICLE_PREP`。
+只有 `resolve_validation_gate.py` 输出：
+
+```text
+phase = ARTICLE_PREP
+decision = PROCEED
+```
+
+才进入文章准备阶段。
 
 文章素材优先从以下事实中整理：
 
@@ -267,5 +323,7 @@ qualification 只解决“是否值得开始”，不证明“适配已经完成
 - 不把官方 Skill 的 `inconclusive` 擅自升级成确定技术结论。
 - 不把 qualification 当成适配完成证据。
 - 不把编译成功当成真机运行成功。
+- 不把模拟器/预览器结果当作真机运行成功。
+- 不绕过 deterministic Validation Gate 进入 `ARTICLE_PREP`。
 - 不在没有真实开发记录时生成虚构的故障、修复、测试或截图描述。
 - 不重复实现官方社区已经维护的框架级适配流程。
