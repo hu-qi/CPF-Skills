@@ -1,0 +1,167 @@
+schema_version: 1
+
+activity:
+  name: 三方库适配征文
+  topic: cross_platform_harmony_thirdparty_adaptation
+
+# 本文件只维护活动级约束与判定规则。
+# 框架社区名称、组织链接、官方 Skill 路由等事实继续从 resources/frameworks.yaml 读取，避免重复维护。
+
+version_policy:
+  primary: latest_supported
+  rules:
+    - id: version-latest-primary
+      severity: hard
+      description: 以当前/最新可用平台与框架版本为主；规则或版本发生更新时应重新确认最新版本。
+    - id: version-harmony-fallback
+      severity: exception
+      description: 如果当前最新版本无法完成适配，可按活动允许的兼容版本回退；回退必须在文章中说明原因和实际验证环境。
+      known_fallback:
+        harmony_sdk: "7.0.0 (26)"
+
+eligibility:
+  before_adaptation:
+    - id: library-not-already-adapted
+      severity: hard
+      rule: 候选库必须完成对应活动去重；已有鸿蒙适配的库不符合重复适配资格。
+      evidence_required: true
+    - id: adaptation-actually-needed
+      severity: hard
+      rule: 候选必须确实存在平台适配工作；纯 Dart/纯平台无关代码等无需适配场景不能人为制造适配任务。
+      evidence_required: true
+    - id: cross-platform-topic
+      severity: hard
+      rule: 主题必须属于跨平台三方库适配。
+    - id: environment-only-excluded
+      severity: hard
+      rule: 仅安装环境、配置环境、搭建环境的主题不符合征文主题要求。
+
+technical_evidence:
+  before_article_prep:
+    - id: real-implementation
+      severity: hard
+      rule: 必须存在真实适配代码或实现产物，不能只有方案、伪代码或文字描述。
+      validation_check: implementation
+    - id: build-success
+      severity: hard
+      rule: 适配后的库或示例工程必须能够成功构建。
+      validation_check: build
+    - id: demo-or-scenario
+      severity: hard
+      rule: 必须有 Demo 或最小可验证使用场景。
+      validation_check: demo
+    - id: functional-tests
+      severity: hard
+      rule: 关键功能必须经过实际测试并保留结果。
+      validation_check: tests
+    - id: physical-device-run
+      severity: hard
+      rule: 必须在 HarmonyOS/OpenHarmony 实体设备成功运行。
+      validation_check: device_run
+      device_kind: physical
+      allowed_platforms:
+        - HarmonyOS
+        - OpenHarmony
+    - id: successful-device-screenshots
+      severity: hard
+      rule: 文章必须包含鸿蒙实体设备成功运行截图。
+      validation_check: screenshots
+
+article_content:
+  pre_publish:
+    - id: title-framework-explicit
+      severity: hard
+      rule: 标题必须明确写出所适配框架/技术栈，例如 Flutter、RN、ArkTS 等，不能只写库名和“鸿蒙适配”。
+    - id: practical-instructive-factual
+      severity: hard
+      rule: 内容应具有实践性、指导性并基于真实适配事实。
+    - id: original-content
+      severity: hard
+      rule: 文章必须为原创，不得抄袭。
+    - id: minimum-chinese-characters
+      severity: hard
+      rule: 非代码中文正文不少于 800 字。
+      metric: non_code_chinese_characters
+      threshold:
+        operator: gte
+        value: 800
+    - id: duplication-rate
+      severity: hard
+      rule: 文章重复率不得超过 30%。
+      metric: duplication_rate_percent
+      threshold:
+        operator: lte
+        value: 30
+    - id: real-development-history
+      severity: hard
+      rule: 问题、失败尝试、修复方案、测试结果和截图必须来自真实开发记录，不得事后编造。
+
+ai_policy:
+  - id: ai-not-majority-author
+    severity: hard
+    rule: AI 不得生成文章全部或大部分内容；AI 可辅助整理、检查、润色，但主体经验应来自作者真实适配过程。
+  - id: recommended-ai-tool
+    severity: recommendation
+    rule: 活动推荐使用 CodeArts；如活动要求推荐链接，应使用当前活动提供的 CodeArts 推荐链接，不自行编造链接。
+
+brand_and_links:
+  - id: atomgit-brand
+    severity: hard
+    rule: 涉及代码托管平台时使用“AtomGit”品牌名和 atomgit.com 链接。
+  - id: gitcode-forbidden
+    severity: hard
+    rule: 最终文章中禁止出现“GitCode”品牌或 GitCode 链接。
+    forbidden_terms:
+      - GitCode
+    forbidden_domains:
+      - gitcode.com
+  - id: community-invitation-opening
+    severity: hard
+    rule: 文章开头应包含社区引导语“欢迎加入XXX社区：【组织仓库链接】”；社区名和链接从 resources/frameworks.yaml 读取。
+    template: "欢迎加入{community.name}：【{community.organization}】"
+  - id: community-invitation-ending
+    severity: hard
+    rule: 文章结尾应再次包含社区引导语“欢迎加入XXX社区：【组织仓库链接】”。
+    template: "欢迎加入{community.name}：【{community.organization}】"
+
+publication_checks:
+  pre_publish:
+    - id: csdn-quality-check
+      severity: hard
+      rule: 发布前执行 CSDN 质量自检，质量分必须达到 80 分及以上。
+      metric: csdn_quality_score
+      threshold:
+        operator: gte
+        value: 80
+      url: https://www.csdn.net/qc
+
+post_publish_metrics:
+  - id: readership
+    severity: post_publish
+    rule: 文章发布后的阅读量目标不少于 1000；这是发布后指标，不应作为文章生成或发布前内容检查的阻塞条件。
+    metric: readership
+    threshold:
+      operator: gte
+      value: 1000
+
+phase_mapping:
+  qualification:
+    consumes:
+      - eligibility.before_adaptation
+  validation:
+    consumes:
+      - technical_evidence.before_article_prep
+  article_writing:
+    consumes:
+      - article_content.pre_publish
+      - ai_policy
+      - brand_and_links
+  article_check:
+    consumes:
+      - article_content.pre_publish
+      - ai_policy
+      - brand_and_links
+      - publication_checks.pre_publish
+  post_publish:
+    consumes:
+      - post_publish_metrics
