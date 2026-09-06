@@ -34,15 +34,16 @@ def qualification(
     pending: list[str] | None = None,
 ) -> dict:
     return {
+        "fixture_only": False,
         "framework": framework,
         "candidate": "ExampleLibrary",
         "qualification": {
             "status": status,
             "eligible_to_start_adaptation": eligible,
-            "reason": "fixture",
+            "reason": "deterministic test input",
             "pending_checks": pending or [],
         },
-        "evidence": ["fixture://qualification"],
+        "evidence": ["artifact://qualification"],
     }
 
 
@@ -63,7 +64,7 @@ def test_arkts_recommended_routes_to_official_porting() -> None:
     assert result["route"]["source"] == "official"
     assert result["route"]["skill"] == "ohos-library-porting"
     assert result["route"]["analysis_skill"] == "ohos-library-migration-analyzer"
-    assert result["evidence"] == ["fixture://qualification"]
+    assert result["evidence"] == ["artifact://qualification"]
 
 
 def test_cpp_recommended_preserves_analysis_but_requires_manual_implementation() -> None:
