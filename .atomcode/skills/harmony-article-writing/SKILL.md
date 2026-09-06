@@ -40,6 +40,32 @@ resources/article-rules.yaml
 6. 文章主体中的个人实践叙述、真实问题、失败尝试、关键技术取舍和经验总结必须由作者提供实质内容；
 7. 如果用户要求“一键生成整篇参赛文章”，应说明活动 AI 规则边界，并改为提供素材包 + 提纲 + 分章节写作提示，而不是直接代写大部分正文。
 
+## Fixture 与真实素材隔离
+
+测试夹具只用于回归验证，使用：
+
+```text
+fixture_only = true
+fixture://...
+```
+
+真实文章素材必须：
+
+```text
+fixture_only = false
+```
+
+并使用可以定位真实 commit、diff、日志、测试报告、设备记录和截图的引用。
+
+`build_article_material_pack.py` 会要求 qualification、Validation Gate、development notes 的 `fixture_only` 一致，并递归拒绝真实模式中的 `fixture://` 引用。
+
+因此：
+
+- fixture 可以用于测试“章节映射是否工作”；
+- fixture 不得转换成真实征文素材；
+- 不得通过删除 `fixture_only` 标签把测试记录描述成真实经历；
+- 如果 Material Pack 为 `fixture_only=true`，只能输出测试说明/结构验证，不得帮助包装成可投稿正文。
+
 ## 前置门禁
 
 进入文章写作辅助前，优先要求存在：
@@ -82,6 +108,7 @@ scripts/article/build_article_material_pack.py
 
 Material Pack 至少保留：
 
+- `fixture_only`
 - `framework`
 - `candidate`
 - `qualification_status`
@@ -108,6 +135,12 @@ ai_boundary.full_article_generation_allowed = false
 
 - 明确告诉作者哪些内容需要补真实记录；
 - 不为了让文章结构完整而自行编造。
+
+如果 `fixture_only=true`：
+
+- 明确说明这是回归测试素材；
+- 不生成可冒充真实投稿的实践叙述；
+- 后续 Article Check 即使覆盖 `READY_TO_PUBLISH` 测试分支，也必须保持 `publishable=false`。
 
 ## 推荐文章结构
 
@@ -351,3 +384,4 @@ writing Skill 不能自己宣布“文章已经合规”。
 - 不预测重复率或 CSDN 质量分。
 - 不把 AI 写作本身当成原创性证明。
 - 不绕过 `harmony-article-check` 宣布文章可发布。
+- 不把 `fixture_only=true` 的测试素材改写成真实适配征文。
