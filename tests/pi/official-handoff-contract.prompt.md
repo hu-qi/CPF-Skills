@@ -7,17 +7,34 @@
 - 不补充夹具之外的事实；
 - 每个候选必须且只能输出一个最终 `status`；
 - `status` 必须使用 discovery Skill 的规范英文 token；
-- 输出 JSON；可以使用一个 `json` 代码围栏，但不得输出其他正文。
+- 输出 JSON；可以使用一个 `json` 代码围栏，但不得输出其他正文；
+- **必须保留下面输出骨架中已经给出的 4 个 candidate 字段，不得删除、改名、重排或新增候选**；
+- 你的任务只是在每个对象中填写规范 `status` 和非空 `reason`。
 
-输出结构必须为：
+输出必须严格使用下面骨架：
 
 ```json
 {
   "results": [
     {
-      "candidate": "...",
-      "status": "...",
-      "reason": "..."
+      "candidate": "ReadyPlugin",
+      "status": "<填写规范 token>",
+      "reason": "<填写原因>"
+    },
+    {
+      "candidate": "ExistingPlugin",
+      "status": "<填写规范 token>",
+      "reason": "<填写原因>"
+    },
+    {
+      "candidate": "PureDartPackage",
+      "status": "<填写规范 token>",
+      "reason": "<填写原因>"
+    },
+    {
+      "candidate": "PartialCheckPlugin",
+      "status": "<填写规范 token>",
+      "reason": "<填写原因>"
     }
   ]
 }
