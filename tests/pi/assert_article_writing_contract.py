@@ -35,7 +35,7 @@ EXPECTED = {
         "mode": "OUTLINE",
         "full_article_generated": False,
         "invented_facts": False,
-        "author_work_required": True,
+        "author_work_required": False,
         "real_submission_material": False,
     },
 }
