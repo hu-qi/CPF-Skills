@@ -51,6 +51,19 @@ Flutter 当前 qualification 结构由仓库内确定性构建器生成，核心
 
 如果已有 qualification，不要重新执行完整 discovery，除非用户明确要求重新核查，或证据已明显过期。
 
+## Fixture 隔离
+
+测试夹具和真实流程必须严格分离。
+
+- 普通 qualification 中出现 `fixture://...` 证据时，确定性 gate 必须直接拒绝；
+- 只有显式 `fixture_only = true` 的回归夹具允许使用 `fixture://...`；
+- fixture 可以覆盖 qualification / routing 状态机分支，但**不能触发真实操作**；
+- fixture 即使得到 `ADAPTATION/PROCEED` 状态，也不得解析真实框架 porting Skill、不得调用官方或人工适配动作；
+- fixture 的 `NEEDS_OFFICIAL_CHECK` 也不得自动调用真实官方资格检查 Skill；
+- 下游 artifact 必须继续传播 `fixture_only`，不得在中间阶段丢失该语义。
+
+因此 `fixture_only = true` 只表示“允许测试状态机”，不表示“允许执行 next_action”。
+
 ## 规范阶段
 
 总控使用以下阶段 token：
@@ -70,9 +83,11 @@ Flutter 当前 qualification 结构由仓库内确定性构建器生成，核心
 
 每次输出一个顶层 `decision`：
 
-- `PROCEED`：当前门禁已通过，可以执行 `next_action`。
+- `PROCEED`：当前门禁已通过，可以执行 `next_action`；仅适用于真实流程。
 - `BLOCKED`：缺少必需证据或检查，必须先完成 `pending_checks`。
 - `STOP`：候选已被确定排除，停止适配流程。
+
+fixture 即使为了回归覆盖得到 `PROCEED`，也只能测试状态机，不得执行真实 `next_action`。
 
 ## Qualification 门禁
 
@@ -114,7 +129,7 @@ Flutter 当前 qualification 结构由仓库内确定性构建器生成，核心
 - `decision = BLOCKED`
 - `next_action = 完成 qualification.pending_checks 中的官方检查或 required 去重`
 
-如果 `pending_checks` 指向具体官方 Skill：
+对于**真实输入**，如果 `pending_checks` 指向具体官方 Skill：
 
 1. 先确认该 Skill 已在当前 `resources/frameworks.yaml` 或当前官方仓库中存在；
 2. 已确认存在时，**必须**把该 Skill 写入输出的 `route.skill`，即使当前 `decision = BLOCKED`；
@@ -135,10 +150,13 @@ Flutter 当前 qualification 结构由仓库内确定性构建器生成，核心
 }
 ```
 
+如果同一 artifact 为 `fixture_only = true`，则不得把该 `route.skill` 当成真实可执行动作。
+
 ### 5. `RECOMMENDED`
 
-只有同时满足以下条件才允许进入适配：
+只有同时满足以下条件才允许真实流程进入适配：
 
+- `fixture_only != true`；
 - `qualification.status == RECOMMENDED`；
 - `qualification.eligible_to_start_adaptation == true`；
 - qualification 没有仍会阻塞资格的 `pending_checks`。
@@ -156,11 +174,13 @@ Flutter 当前 qualification 结构由仓库内确定性构建器生成，核心
 - `decision = BLOCKED`；
 - 要求重新生成 qualification。
 
+fixture 为了测试状态机可以覆盖到 `ADAPTATION/PROCEED`，但仍属于非执行态：不得解析或调用真实适配路由。
+
 ## 官方 Skill 路由
 
 框架资源与官方 Skill 名称读取 `resources/frameworks.yaml`，不要在本 Skill 中复制易变化版本或仓库事实。
 
-进入 `ADAPTATION` 时，优先使用仓库内确定性路由：
+真实输入进入 `ADAPTATION` 时，优先使用仓库内确定性路由：
 
 ```text
 scripts/orchestrator/resolve_framework_route.py
@@ -168,6 +188,8 @@ scripts/orchestrator/resolve_next_action.py
 ```
 
 确定性 resolver 的结果高于模型临场猜测；如果 resolver 返回 `MANUAL_REQUIRED`，不得自行创造一个不存在的官方实现 Skill。
+
+当 `fixture_only = true` 时，确定性路由必须保持非执行态，例如返回 `BLOCKED_BY_GATE` / 空 route；模型不得绕过这一结果自行补出官方或人工 porting 动作。
 
 ### Flutter
 
@@ -257,16 +279,19 @@ MISSING
 
 Validation Gate 的机器输出是阶段推进的事实依据。模型不能因为“证据看起来差不多齐了”而覆盖 `BLOCKED`。
 
+fixture Validation 可以覆盖同一状态机，但必须保持 `fixture_only = true`，不得被解释为真实技术证据。
+
 ## Article Prep
 
-只有 `resolve_validation_gate.py` 输出：
+只有真实 `resolve_validation_gate.py` 输出：
 
 ```text
 phase = ARTICLE_PREP
 decision = PROCEED
+fixture_only = false
 ```
 
-才进入文章准备阶段。
+才进入真实文章准备阶段。
 
 文章素材优先从以下事实中整理：
 
@@ -280,11 +305,15 @@ decision = PROCEED
 
 如果仓库中存在 `harmony-article-writing`，路由给它；不存在时只输出结构化素材包和待实现路由，不假装已完成文章 Skill。
 
+fixture 的 Article Material Pack 只能用于结构和回归测试，不能包装成真实征文素材。
+
 ## Article Check
 
 文章草稿形成后，如果存在 `harmony-article-check`，执行活动合规检查。
 
 合规检查与发布后指标分开：发布前不能因为“阅读量尚未达到目标”判文章内容生成失败；但必须保留为发布后待跟踪项。
+
+fixture 即使覆盖 `READY_TO_PUBLISH` 状态分支，也必须保持 `publishable = false`。
 
 ## 输出契约
 
@@ -292,6 +321,7 @@ decision = PROCEED
 
 ```json
 {
+  "fixture_only": false,
   "framework": "flutter",
   "candidate": "package_name",
   "phase": "ADAPTATION",
@@ -309,11 +339,13 @@ decision = PROCEED
 
 其中：
 
+- `fixture_only` 必须从输入继续传播，不能在中间阶段丢失；
 - `qualification_status` 原样保留 qualification 的规范 token；
-- `route.skill` 只有在 Skill 名称已从当前配置或当前官方仓库确认时才能填写；
-- **当 `NEEDS_OFFICIAL_CHECK` 的 `pending_checks` 明确引用已确认存在的 Skill 时，`route.skill` 必须填写该 Skill，不能因为 `decision = BLOCKED` 而置空**；
+- `route.skill` 只有在 Skill 名称已从当前配置或当前官方仓库确认、且当前是真实可执行流程时才能填写；
+- **当真实 `NEEDS_OFFICIAL_CHECK` 的 `pending_checks` 明确引用已确认存在的 Skill 时，`route.skill` 必须填写该 Skill，不能因为 `decision = BLOCKED` 而置空**；
+- fixture 不得产生可执行的真实 Skill route；
 - 不存在可确认的 Skill 时使用 `null`，并把 `route.source` 设为 `manual`；
-- `evidence` 只放实际存在的路径、URL、commit、日志、截图等引用。
+- `evidence` 只放实际存在的路径、URL、commit、日志、截图等引用；真实流程不得使用 `fixture://`。
 
 ## 红线
 
@@ -327,3 +359,5 @@ decision = PROCEED
 - 不绕过 deterministic Validation Gate 进入 `ARTICLE_PREP`。
 - 不在没有真实开发记录时生成虚构的故障、修复、测试或截图描述。
 - 不重复实现官方社区已经维护的框架级适配流程。
+- 不允许 fixture 触发真实资格检查、适配路由、官方 Skill 或人工 porting 动作。
+- 不允许把 `fixture://` 证据混入真实 qualification、validation、material pack 或 compliance。
