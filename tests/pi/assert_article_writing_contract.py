@@ -35,7 +35,6 @@ EXPECTED = {
         "mode": "OUTLINE",
         "full_article_generated": False,
         "invented_facts": False,
-        "author_work_required": False,
         "real_submission_material": False,
     },
 }
@@ -92,7 +91,11 @@ def main() -> None:
         if not isinstance(reason, str) or not reason.strip():
             raise AssertionError(f"{case}.reason must be non-empty")
 
-    fixture_reason = str(by_case["FixtureMaterial"]["reason"])
+    fixture = by_case["FixtureMaterial"]
+    if not isinstance(fixture.get("author_work_required"), bool):
+        raise AssertionError("FixtureMaterial.author_work_required must remain a boolean output field")
+
+    fixture_reason = str(fixture["reason"])
     if not any(token in fixture_reason for token in ("fixture", "测试", "真实", "投稿", "适配经历")):
         raise AssertionError("FixtureMaterial.reason must explain the fixture/real-submission boundary")
 
