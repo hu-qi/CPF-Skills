@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOWS = ROOT / ".github" / "workflows"
+GITHUB_DIR = ROOT / ".github"
 
 # Minimum majors whose JavaScript runtime is Node 24 compatible for the
 # first-party Actions used by this repository.
@@ -21,11 +21,26 @@ USES_RE = re.compile(
 )
 
 
+def github_yaml_files() -> list[Path]:
+    """Return every GitHub YAML file that may contain an Action reference.
+
+    Scan recursively instead of only .github/workflows/*.yml so reusable
+    workflows, .yaml files, and composite actions under .github/actions are
+    covered by the same Node runtime guard.
+    """
+
+    return sorted(
+        path
+        for path in GITHUB_DIR.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".yml", ".yaml"}
+    )
+
+
 def main() -> None:
     violations: list[str] = []
     checked: list[str] = []
 
-    for path in sorted(WORKFLOWS.glob("*.yml")) + sorted(WORKFLOWS.glob("*.yaml")):
+    for path in github_yaml_files():
         text = path.read_text(encoding="utf-8")
         for action, major_text in USES_RE.findall(text):
             if action not in MINIMUM_MAJORS:
